@@ -120,6 +120,47 @@ export function countTags(view: Bookmark[]): TagCount[] {
   return [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 }
 
+export type SortKey = 'added' | 'visits' | 'title'
+
+const titleCollator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
+
+// ICU's zh collation puts Han before Latin; list Latin/digits first, then Han by pinyin.
+const startsWithHan = (s: string) => /^\p{Script=Han}/u.test(s.trimStart())
+
+function compareTitles(a: string, b: string): number {
+  return Number(startsWithHan(a)) - Number(startsWithHan(b)) || titleCollator.compare(a, b)
+}
+
+/** History lists the same page under slightly different URLs; fold them together. */
+export function visitKey(url: string): string {
+  return url.replace(/#.*$/, '').replace(/\/+$/, '')
+}
+
+export function countVisits(items: { url?: string; visitCount?: number }[]): Map<string, number> {
+  const m = new Map<string, number>()
+  for (const it of items) {
+    if (!it.url) continue
+    const k = visitKey(it.url)
+    m.set(k, (m.get(k) ?? 0) + (it.visitCount ?? 0))
+  }
+  return m
+}
+
+/** Returns a new array; ties fall back to most recently added. */
+export function sortBookmarks(list: Bookmark[], key: SortKey, visits?: Map<string, number>): Bookmark[] {
+  const byAdded = (a: Bookmark, b: Bookmark) => b.created_at - a.created_at
+  const v = (b: Bookmark) => visits?.get(visitKey(b.url)) ?? 0
+  const out = [...list]
+  switch (key) {
+    case 'added':
+      return out.sort(byAdded)
+    case 'visits':
+      return out.sort((a, b) => v(b) - v(a) || byAdded(a, b))
+    case 'title':
+      return out.sort((a, b) => compareTitles(a.title || a.url, b.title || b.url) || byAdded(a, b))
+  }
+}
+
 /** Matches all selected tags (AND) and the free-text query against title, url and tags. */
 export function filterBookmarks(view: Bookmark[], query: string, selectedTags: string[]): Bookmark[] {
   const q = query.trim().toLowerCase()

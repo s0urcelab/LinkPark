@@ -64,6 +64,7 @@ export function Onboarding() {
             <ul className="list-inside list-disc space-y-1">
               <li>在任意网页或链接上右键，选择「添加到 LinkPark」</li>
               <li>点击工具栏的 LinkPark 图标查看、搜索和按标签筛选书签</li>
+              <li>图标上的角标显示同步状态，右键图标可打开设置</li>
               <li>建议将 LinkPark 固定到工具栏，方便随时打开</li>
             </ul>
             <button className="btn-primary mt-2" onClick={() => window.close()}>

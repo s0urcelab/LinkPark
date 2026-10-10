@@ -1,6 +1,23 @@
+import type { SortKey } from './ops'
 import type { Cache, FailedBatch, Onboarding, Op, Settings, SyncState } from './types'
 
+export interface Prefs {
+  sort: SortKey
+  /** Title-only rows. */
+  compact: boolean
+}
+
+/** Last popup view, restored the next time it opens. */
+export interface PopupState {
+  query: string
+  tags: string[]
+  scrollTop: number
+  limit: number
+}
+
 export interface StorageSchema {
+  prefs: Prefs
+  popupState: PopupState
   settings: Settings
   cache: Cache
   outbox: Op[]
@@ -12,6 +29,8 @@ export interface StorageSchema {
 export type StorageKey = keyof StorageSchema
 
 export const defaults: StorageSchema = {
+  prefs: { sort: 'added', compact: false },
+  popupState: { query: '', tags: [], scrollTop: 0, limit: 0 },
   settings: { serverUrl: '', token: '' },
   cache: { version: 0, bookmarks: {} },
   outbox: [],

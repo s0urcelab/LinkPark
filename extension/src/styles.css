@@ -8,8 +8,56 @@ html {
   color-scheme: light dark;
 }
 
+/* Tailwind v4's preflight resets buttons to the default cursor. */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+}
+
 body {
   @apply bg-white text-zinc-900 antialiased dark:bg-zinc-900 dark:text-zinc-100;
+}
+
+/* Thin, trackless scrollbars everywhere. Only the ::-webkit-* pseudos are used:
+   setting scrollbar-width/scrollbar-color would make Chrome ignore them. */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgb(161 161 170 / 0.45);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(113 113 122 / 0.7);
+}
+
+/* Scroll container whose thumb only appears on hover. The gutter is always reserved
+   so widths don't jump; place the container with margins so the scrollbar lands on
+   the content column's edge instead of the window edge. */
+@utility scroll-area {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+  &:hover::-webkit-scrollbar-thumb {
+    background: rgb(161 161 170 / 0.45);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgb(113 113 122 / 0.7);
+  }
 }
 
 @utility input {

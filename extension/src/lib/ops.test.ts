@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { flattenTree, type TreeNode } from './importer'
-import { buildView, countTags, filterBookmarks, makeCreateOp, makeDeleteOp, makeUpdateOp, mergePull, normalizeTags } from './ops'
+import { buildView, countTags, countVisits, filterBookmarks, makeCreateOp, makeDeleteOp, makeUpdateOp, mergePull, normalizeTags, sortBookmarks } from './ops'
 import type { Bookmark, Cache } from './types'
 
 const bm = (id: string, url: string, tags: string[] = [], created_at = 1): Bookmark => ({
@@ -44,6 +44,35 @@ describe('filter and tags', () => {
     expect(filterBookmarks(view, '', ['dev']).map((b) => b.id)).toEqual(['a', 'b'])
     expect(filterBookmarks(view, '', ['dev', 'go']).map((b) => b.id)).toEqual(['a'])
     expect(filterBookmarks(view, 'react', []).map((b) => b.id)).toEqual(['b'])
+  })
+})
+
+describe('sortBookmarks', () => {
+  const list = [
+    { ...bm('a', 'https://b.com/', [], 1), title: '苹果' },
+    { ...bm('b', 'https://a.com', [], 3), title: 'Banana' },
+    { ...bm('c', 'https://c.com', [], 2), title: 'apple 10' },
+    { ...bm('d', 'https://d.com', [], 4), title: 'apple 9' },
+  ]
+  const ids = (l: Bookmark[]) => l.map((b) => b.id)
+
+  it('sorts by most recently added', () => {
+    expect(ids(sortBookmarks(list, 'added'))).toEqual(['d', 'b', 'c', 'a'])
+  })
+  it('sorts by visit count, folding URL variants, ties by added', () => {
+    const visits = countVisits([
+      { url: 'https://b.com', visitCount: 3 },
+      { url: 'https://b.com/#top', visitCount: 2 },
+      { url: 'https://c.com/', visitCount: 4 },
+    ])
+    expect(ids(sortBookmarks(list, 'visits', visits))).toEqual(['a', 'c', 'd', 'b'])
+  })
+  it('sorts by title: natural numbers, Latin before Han', () => {
+    expect(ids(sortBookmarks(list, 'title'))).toEqual(['d', 'c', 'b', 'a'])
+  })
+  it('does not mutate the input', () => {
+    sortBookmarks(list, 'title')
+    expect(ids(list)).toEqual(['a', 'b', 'c', 'd'])
   })
 })
 

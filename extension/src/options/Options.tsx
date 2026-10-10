@@ -56,7 +56,7 @@ function SyncSection() {
     <Section title="同步">
       <div className="space-y-4 text-sm">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <SyncIndicator state={configured ? syncState : { ...syncState, status: 'unconfigured' }} pending={outbox.length} failed={failed.length} />
+          <SyncIndicator configured={configured} state={syncState} pending={outbox.length} failed={failed.length} />
           <span className="text-zinc-500">本地缓存 {Object.keys(cache.bookmarks).length} 个书签</span>
           {syncState.lastSyncAt && <span className="text-zinc-500">上次同步 {new Date(syncState.lastSyncAt).toLocaleString()}</span>}
         </div>

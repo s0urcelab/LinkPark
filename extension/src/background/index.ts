@@ -3,10 +3,12 @@ import type { AddResult, Message, Reply } from '../lib/messages'
 import { buildView, findByUrl, makeCreateOp, makeDeleteOp, makeUpdateOp } from '../lib/ops'
 import { getItem, isConfigured, patchItem, setItem } from '../lib/storage'
 import { createSyncEngine } from '../lib/sync'
+import { describeSync, type SyncTone } from '../lib/syncStatus'
 import type { ImportItem } from '../lib/types'
 
 const MENU_PAGE = 'linkpark-add-page'
 const MENU_LINK = 'linkpark-add-link'
+const MENU_SYNC = 'linkpark-sync-now'
 const RETRY_ALARM = 'linkpark-retry'
 const PERIODIC_ALARM = 'linkpark-periodic'
 // chrome.alarms cannot fire sooner than 30s; shorter backoffs use a timer while the worker is alive.
@@ -35,16 +37,32 @@ const engine = createSyncEngine({
 
 let flashing = false
 
+const TONE_COLORS: Record<SyncTone, string> = {
+  ok: '#4f46e5',
+  busy: '#4f46e5',
+  warn: '#d97706',
+  error: '#dc2626',
+}
+
+/** The toolbar icon is the sync status indicator: badge for state, tooltip for details. */
 async function updateBadge(): Promise<void> {
+  const [outbox, failed, state, settings] = await Promise.all([getItem('outbox'), getItem('failed'), getItem('syncState'), getItem('settings')])
+  const configured = isConfigured(settings)
+  const { label, tone } = describeSync({ configured, state, pending: outbox.length, failed: failed.length })
+
+  const lines = [`LinkPark · ${label}`]
+  if (state.lastError && tone !== 'ok') lines.push(state.lastError)
+  if (configured && state.lastSyncAt) lines.push(`上次同步：${new Date(state.lastSyncAt).toLocaleString()}`)
+  if (state.notice) lines.push(state.notice)
+  if (!configured) lines.push('右键点击图标打开设置')
+  await chrome.action.setTitle({ title: lines.join('\n') })
+
   if (flashing) return
-  const [outbox, failed, state] = await Promise.all([getItem('outbox'), getItem('failed'), getItem('syncState')])
-  if (state.status === 'auth_error' || failed.length > 0) {
-    await setBadge('!', '#dc2626')
-  } else if (outbox.length > 0) {
-    await setBadge(outbox.length > 99 ? '99+' : String(outbox.length), '#d97706')
-  } else {
-    await setBadge('', '#4f46e5')
-  }
+  let text = ''
+  if (!configured) text = '?'
+  else if (tone === 'error') text = '!'
+  else if (outbox.length > 0) text = outbox.length > 99 ? '99+' : String(outbox.length)
+  await setBadge(text, TONE_COLORS[tone])
 }
 
 async function setBadge(text: string, color: string): Promise<void> {
@@ -151,6 +169,7 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: MENU_PAGE, title: '添加到 LinkPark', contexts: ['page'] })
     chrome.contextMenus.create({ id: MENU_LINK, title: '添加链接到 LinkPark', contexts: ['link'] })
+    chrome.contextMenus.create({ id: MENU_SYNC, title: '立即同步', contexts: ['action'] })
   })
   if (reason === chrome.runtime.OnInstalledReason.INSTALL) {
     await chrome.tabs.create({ url: chrome.runtime.getURL('src/onboarding/index.html') })
@@ -158,6 +177,7 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
 })
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === MENU_SYNC) return engine.sync({ full: true })
   const isLink = info.menuItemId === MENU_LINK
   const url = (isLink ? info.linkUrl : info.pageUrl || tab?.url) ?? ''
   const title = isLink ? info.selectionText || url : tab?.title || url
@@ -175,6 +195,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 })
 
 chrome.runtime.onStartup.addListener(() => void engine.sync())
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && 'settings' in changes) void updateBadge()
+})
 
 self.addEventListener('online', () => void engine.sync())
 

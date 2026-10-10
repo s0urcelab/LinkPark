@@ -8,6 +8,10 @@ import type { Bookmark, UpdatePayload } from '../lib/types'
 interface Props {
   bookmark: Bookmark
   pending: boolean
+  /** Title-only single-line row. */
+  compact?: boolean
+  /** Shown only when sorting by visit frequency. */
+  visits?: number
   editing: boolean
   allTags: string[]
   onEdit(): void
@@ -23,7 +27,7 @@ function hostname(url: string): string {
   }
 }
 
-export function BookmarkItem({ bookmark: b, pending, editing, allTags, onEdit, onDone, onTagClick }: Props) {
+export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, allTags, onEdit, onDone, onTagClick }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
@@ -45,6 +49,37 @@ export function BookmarkItem({ bookmark: b, pending, editing, allTags, onEdit, o
     void send({ type: 'delete', id: b.id })
   }
 
+  const actions = (
+    <div className={`flex shrink-0 items-center gap-0.5 ${confirmDelete ? '' : 'opacity-0 group-hover:opacity-100'}`}>
+      {!confirmDelete && (
+        <button className={`btn-ghost ${compact ? 'p-1' : 'p-1.5'}`} title="编辑" onClick={onEdit}>
+          <EditIcon width={14} height={14} />
+        </button>
+      )}
+      <button
+        className={`btn-danger ${compact ? 'p-1' : 'p-1.5'} ${confirmDelete ? 'bg-red-50 text-xs dark:bg-red-950' : ''}`}
+        title="删除"
+        onClick={remove}
+      >
+        {confirmDelete ? '确认删除' : <TrashIcon width={14} height={14} />}
+      </button>
+    </div>
+  )
+
+  if (compact) {
+    const tooltip = [b.title, b.url, visits !== undefined ? `访问 ${visits} 次` : ''].filter(Boolean).join('\n')
+    return (
+      <li className="group flex items-center gap-2.5 rounded-md px-2 py-0.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+        <Favicon url={b.url} size={16} />
+        {/* CJK glyphs sit low in the line box; nudge up to center against the icon */}
+        <button className="min-w-0 flex-1 -translate-y-px truncate py-0.5 text-left text-sm leading-5" onClick={open} onAuxClick={open} title={tooltip}>
+          {b.title || b.url}
+        </button>
+        {actions}
+      </li>
+    )
+  }
+
   return (
     <li className="group flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
       <div className="pt-0.5">
@@ -55,7 +90,8 @@ export function BookmarkItem({ bookmark: b, pending, editing, allTags, onEdit, o
           <div className="truncate text-sm font-medium">{b.title || b.url}</div>
           <div className="flex items-center gap-1.5 truncate text-xs text-zinc-400">
             {pending && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" title="待同步" />}
-            {hostname(b.url)}
+            <span className="truncate">{hostname(b.url)}</span>
+            {visits !== undefined && <span className="shrink-0">· 访问 {visits} 次</span>}
           </div>
         </button>
         {b.tags.length > 0 && (
@@ -72,16 +108,7 @@ export function BookmarkItem({ bookmark: b, pending, editing, allTags, onEdit, o
           </div>
         )}
       </div>
-      <div className={`flex shrink-0 items-center gap-0.5 ${confirmDelete ? '' : 'opacity-0 group-hover:opacity-100'}`}>
-        {!confirmDelete && (
-          <button className="btn-ghost p-1.5" title="编辑" onClick={onEdit}>
-            <EditIcon width={14} height={14} />
-          </button>
-        )}
-        <button className={`btn-danger p-1.5 ${confirmDelete ? 'bg-red-50 text-xs dark:bg-red-950' : ''}`} title="删除" onClick={remove}>
-          {confirmDelete ? '确认删除' : <TrashIcon width={14} height={14} />}
-        </button>
-      </div>
+      {actions}
     </li>
   )
 }
