@@ -48,8 +48,9 @@ export function useDragReorder(ids: string[], onMove: (id: string, prev?: string
     if (!drag) return ''
     const cls: string[] = []
     if (drag.id === ids[i]) cls.push('opacity-40')
-    if (drag.over === i) cls.push('shadow-[inset_0_2px_0_0_var(--color-indigo-500)]')
-    else if (drag.over === i + 1 && i === ids.length - 1) cls.push('shadow-[inset_0_-2px_0_0_var(--color-indigo-500)]')
+    if (drag.over === i) cls.push('shadow-[inset_0_2px_0_0_var(--color-forest)] dark:shadow-[inset_0_2px_0_0_var(--color-mint)]')
+    else if (drag.over === i + 1 && i === ids.length - 1)
+      cls.push('shadow-[inset_0_-2px_0_0_var(--color-forest)] dark:shadow-[inset_0_-2px_0_0_var(--color-mint)]')
     return cls.join(' ')
   }
 

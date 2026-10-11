@@ -2,6 +2,13 @@
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  /* Brand palette. Light theme: forest is the accent; dark theme: mint is. */
+  --color-forest: #173f35;
+  --color-mint: #a8ddb5;
+  --color-ivory: #f5f3e9;
+  --color-charcoal: #26332f;
+  --color-sage: #e4e9e3;
 }
 
 html {
@@ -17,7 +24,7 @@ html {
 }
 
 body {
-  @apply bg-white text-zinc-900 antialiased dark:bg-zinc-900 dark:text-zinc-100;
+  @apply bg-white text-charcoal antialiased dark:bg-zinc-900 dark:text-zinc-100;
 }
 
 /* Thin, trackless scrollbars everywhere. Only the ::-webkit-* pseudos are used:
@@ -61,9 +68,9 @@ body {
 }
 
 @utility input {
-  @apply w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition
-    placeholder:text-zinc-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20
-    dark:border-zinc-700 dark:bg-zinc-800;
+  @apply w-full rounded-lg border border-sage bg-white px-3 py-2 text-sm outline-none transition
+    placeholder:text-charcoal/40 focus:border-forest focus:ring-2 focus:ring-mint/60
+    dark:border-zinc-700 dark:bg-zinc-800 dark:placeholder:text-zinc-500 dark:focus:border-mint dark:focus:ring-mint/20;
 }
 
 @utility btn {
@@ -72,13 +79,50 @@ body {
 }
 
 @utility btn-primary {
-  @apply btn bg-indigo-600 text-white hover:bg-indigo-500;
+  @apply btn bg-forest text-white hover:bg-forest/90 dark:bg-mint dark:text-forest dark:hover:bg-mint/90;
 }
 
 @utility btn-ghost {
-  @apply btn text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800;
+  @apply btn text-charcoal/70 hover:bg-sage hover:text-charcoal dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100;
 }
 
 @utility btn-danger {
-  @apply btn text-red-600 hover:bg-red-50 dark:hover:bg-red-950;
+  @apply btn text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950;
+}
+
+/* Square bordered icon button beside the popup search box. */
+@utility icon-btn {
+  @apply relative flex size-9 shrink-0 items-center justify-center rounded-lg border border-sage bg-white text-charcoal/60 transition
+    hover:bg-sage hover:text-charcoal
+    dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100;
+
+  &[aria-pressed='true'] {
+    @apply border-forest bg-forest text-white hover:bg-forest/90 dark:border-mint dark:bg-mint dark:text-forest dark:hover:bg-mint/90;
+  }
+}
+
+/* Low-key text button in the list toolbar. */
+@utility tool-btn {
+  @apply flex items-center gap-1 rounded-md px-1.5 py-1 text-charcoal/60 transition hover:bg-sage hover:text-charcoal
+    disabled:cursor-not-allowed disabled:opacity-50
+    dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200;
+}
+
+/* Shrinks a label's box to its cap height so flex centering lines icons up with the
+   glyphs rather than the font's ascent/descent, which sits CJK text low. The box
+   gets shorter, so give the parent a fixed height. */
+@utility text-box-cap {
+  text-box: trim-both cap alphabetic;
+}
+
+@utility chip {
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs transition;
+}
+
+@utility hover-row {
+  @apply hover:bg-sage/70 dark:hover:bg-zinc-800/60;
+}
+
+mark {
+  @apply rounded-sm bg-mint/70 text-forest dark:bg-mint/25 dark:text-mint;
 }

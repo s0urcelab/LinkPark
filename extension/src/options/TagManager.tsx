@@ -83,7 +83,7 @@ export function TagManager() {
             )}
             <span className="w-10 shrink-0 text-right text-xs text-zinc-400">{t.count}</span>
             <button
-              className={`btn-ghost shrink-0 p-1.5 ${t.pinned ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400'}`}
+              className={`btn-ghost shrink-0 p-1.5 ${t.pinned ? 'text-forest dark:text-mint' : 'text-zinc-400'}`}
               title={t.pinned ? '取消固定' : '固定到标签栏'}
               aria-pressed={t.pinned}
               onClick={() => sendOps([makeTagOp(t.name, { pinned: !t.pinned })])}

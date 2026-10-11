@@ -107,7 +107,7 @@ export function ImportPanel({ onFinished, onSkip }: { onFinished?(): void; onSki
       {folders.length > 0 && (
         <details className="rounded-lg border border-zinc-200 dark:border-zinc-800">
           <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-600 select-none dark:text-zinc-300">
-            选择直接放入暂存区的文件夹（可选）{stashKeys.size > 0 && <span className="text-indigo-600">· 已选 {stashKeys.size} 个</span>}
+            选择直接放入暂存区的文件夹（可选）{stashKeys.size > 0 && <span className="text-forest dark:text-mint">· 已选 {stashKeys.size} 个</span>}
           </summary>
           <p className="px-3 pb-1 text-xs text-zinc-500">勾选的文件夹（含子文件夹）会以文件夹名为组名进入暂存区，其中的链接不会导入为书签。</p>
           <ul className="max-h-72 overflow-y-auto px-2 pb-2">

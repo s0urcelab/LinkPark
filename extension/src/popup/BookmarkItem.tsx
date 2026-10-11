@@ -1,5 +1,6 @@
 import { useEffect, useState, type HTMLAttributes, type MouseEvent } from 'react'
 import { Favicon } from '../components/Favicon'
+import { Highlight } from '../components/Highlight'
 import { EditIcon, TrashIcon } from '../components/icons'
 import { TagInput } from '../components/TagInput'
 import { send } from '../lib/messages'
@@ -12,6 +13,8 @@ interface Props {
   compact?: boolean
   /** Shown only when sorting by visit frequency. */
   visits?: number
+  /** Current search, highlighted in the row. */
+  query: string
   editing: boolean
   allTags: string[]
   onEdit(): void
@@ -30,7 +33,7 @@ function hostname(url: string): string {
   }
 }
 
-export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, allTags, onEdit, onDone, onTagClick, rowProps, rowClass = '' }: Props) {
+export function BookmarkItem({ bookmark: b, pending, compact, visits, query, editing, allTags, onEdit, onDone, onTagClick, rowProps, rowClass = '' }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
@@ -72,11 +75,11 @@ export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, a
   if (compact) {
     const tooltip = [b.title, b.url, visits !== undefined ? `访问 ${visits} 次` : ''].filter(Boolean).join('\n')
     return (
-      <li {...rowProps} className={`group flex items-center gap-2.5 rounded-md px-2 py-0.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ${rowClass}`}>
+      <li {...rowProps} className={`group hover-row flex items-center gap-2.5 rounded-md px-2 py-0.5 ${rowClass}`}>
         <Favicon url={b.url} stored={b.favicon} size={16} />
         {/* CJK glyphs sit low in the line box; nudge up to center against the icon */}
         <button className="min-w-0 flex-1 -translate-y-px truncate py-0.5 text-left text-sm leading-5" onClick={open} onAuxClick={open} title={tooltip}>
-          {b.title || b.url}
+          <Highlight text={b.title || b.url} query={query} />
         </button>
         {actions}
       </li>
@@ -84,16 +87,20 @@ export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, a
   }
 
   return (
-    <li {...rowProps} className={`group flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ${rowClass}`}>
+    <li {...rowProps} className={`group hover-row flex items-start gap-3 rounded-lg px-2 py-2 ${rowClass}`}>
       <div className="pt-0.5">
         <Favicon url={b.url} stored={b.favicon} />
       </div>
       <div className="min-w-0 flex-1">
         <button className="block w-full text-left" onClick={open} onAuxClick={open} title={b.url}>
-          <div className="truncate text-sm font-medium">{b.title || b.url}</div>
-          <div className="flex items-center gap-1.5 truncate text-xs text-zinc-400">
+          <div className="truncate text-sm font-medium">
+            <Highlight text={b.title || b.url} query={query} />
+          </div>
+          <div className="flex items-center gap-1.5 truncate text-xs text-charcoal/50 dark:text-zinc-400">
             {pending && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" title="待同步" />}
-            <span className="truncate">{hostname(b.url)}</span>
+            <span className="truncate">
+              <Highlight text={hostname(b.url)} query={query} />
+            </span>
             {visits !== undefined && <span className="shrink-0">· 访问 {visits} 次</span>}
           </div>
         </button>
@@ -103,9 +110,9 @@ export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, a
               <button
                 key={t}
                 onClick={() => onTagClick(t)}
-                className="rounded bg-zinc-100 px-1.5 py-px text-[11px] text-zinc-500 hover:bg-indigo-50 hover:text-indigo-600 dark:bg-zinc-800 dark:text-zinc-400"
+                className="rounded bg-mint/35 px-1.5 py-px text-[11px] text-forest/80 hover:bg-mint hover:text-forest dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-mint/20 dark:hover:text-mint"
               >
-                {t}
+                <Highlight text={t} query={query} />
               </button>
             ))}
           </div>
@@ -131,7 +138,7 @@ function Editor({ bookmark: b, allTags, onDone }: { bookmark: Bookmark; allTags:
   }
 
   return (
-    <li className="my-1 space-y-2 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
+    <li className="my-1 space-y-2 rounded-lg border border-mint bg-mint/15 p-3 dark:border-mint/30 dark:bg-mint/5">
       <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="标题" onKeyDown={(e) => e.key === 'Enter' && save()} />
       <input className="input text-xs" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="链接" />
       <TagInput value={tags} onChange={setTags} suggestions={allTags} autoFocus />

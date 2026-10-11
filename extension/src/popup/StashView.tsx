@@ -1,13 +1,16 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { Favicon } from '../components/Favicon'
-import { ArchiveIcon, ChevronRightIcon, EditIcon, StarIcon, TrashIcon, XIcon } from '../components/icons'
+import { Highlight } from '../components/Highlight'
+import { ArchiveIcon, ChevronRightIcon, EditIcon, ExternalLinkIcon, StarIcon, TrashIcon, XIcon } from '../components/icons'
 import { send } from '../lib/messages'
 import { makeDeleteOp, makeStashUpdateOp } from '../lib/ops'
-import { defaultStashName, stashLabel, TABS_PERMISSION } from '../lib/stash'
+import { defaultStashName, filterStashes, stashLabel, TABS_PERMISSION } from '../lib/stash'
 import type { Stash, StashItem } from '../lib/types'
+import { Toolbar } from './Toolbar'
 
 interface Props {
   stashes: Stash[]
+  query: string
   /** URLs that are already bookmarked. */
   saved: Set<string>
   /** Expanded groups. */
@@ -16,8 +19,10 @@ interface Props {
   notify(msg: string): void
 }
 
-export function StashView({ stashes, saved, open, onToggle, notify }: Props) {
+export function StashView({ stashes, query, saved, open, onToggle, notify }: Props) {
   const [busy, setBusy] = useState(false)
+  const searching = query.trim() !== ''
+  const matches = useMemo(() => filterStashes(stashes, query), [stashes, query])
 
   const stashWindow = async () => {
     // Request inside the click gesture. Chrome may close the popup while prompting;
@@ -37,31 +42,57 @@ export function StashView({ stashes, saved, open, onToggle, notify }: Props) {
     }
   }
 
+  const total = stashes.reduce((n, s) => n + s.items.length, 0)
+  const found = matches.reduce((n, m) => n + m.hits.length, 0)
+  const summary = (
+    <>
+      <span className="font-semibold text-forest dark:text-mint">暂存区</span>
+      {' · '}
+      {searching ? `找到 ${found} 个标签页` : stashes.length ? `${stashes.length} 组 · ${total} 个标签页` : '空'}
+    </>
+  )
+
   return (
     <>
-      <div className="mx-3 mt-2 flex items-center justify-between px-2">
-        <span className="text-xs text-zinc-500">{stashes.length > 0 ? `${stashes.length} 组暂存` : ''}</span>
-        <button className="btn-ghost px-2 py-1 text-xs" disabled={busy} onClick={() => void stashWindow()}>
-          <ArchiveIcon width={14} height={14} /> 暂存当前窗口的标签页
+      <Toolbar summary={summary}>
+        <button className="tool-btn h-6" disabled={busy} onClick={() => void stashWindow()}>
+          <ArchiveIcon width={13} height={13} />
+          <span className="text-box-cap">暂存当前窗口</span>
         </button>
-      </div>
-      <ul className="scroll-area mx-3 mt-1 flex-1 space-y-2 pb-2">
-        {stashes.map((s) => (
-          <StashCard key={s.id} stash={s} saved={saved} open={open.has(s.id)} onToggle={() => onToggle(s.id)} notify={notify} />
+      </Toolbar>
+      <ul className="scroll-area mx-3 mt-2 flex-1 space-y-2 pb-2">
+        {matches.map(({ stash: s, hits }) => (
+          <StashCard
+            key={s.id}
+            stash={s}
+            hits={hits}
+            query={query}
+            saved={saved}
+            open={searching || open.has(s.id)}
+            onToggle={searching ? undefined : () => onToggle(s.id)}
+            notify={notify}
+          />
         ))}
         {stashes.length === 0 && (
-          <li className="py-16 text-center text-sm text-zinc-400">暂存区是空的。右键网页或工具栏图标，选择「暂存当前窗口的所有标签页」</li>
+          <li className="py-16 text-center text-sm text-charcoal/40 dark:text-zinc-500">暂存区是空的。右键网页或工具栏图标，选择「暂存当前窗口的所有标签页」</li>
+        )}
+        {stashes.length > 0 && matches.length === 0 && (
+          <li className="py-16 text-center text-sm text-charcoal/40 dark:text-zinc-500">没有匹配的暂存标签页</li>
         )}
       </ul>
     </>
   )
 }
 
-function StashCard({ stash: s, saved, open, onToggle, notify }: {
+function StashCard({ stash: s, hits, query, saved, open, onToggle, notify }: {
   stash: Stash
+  /** Indices of the items to show. */
+  hits: number[]
+  query: string
   saved: Set<string>
   open: boolean
-  onToggle(): void
+  /** Absent while searching: matching groups stay expanded. */
+  onToggle?(): void
   notify(msg: string): void
 }) {
   const [renaming, setRenaming] = useState(false)
@@ -73,9 +104,11 @@ function StashCard({ stash: s, saved, open, onToggle, notify }: {
     return () => clearTimeout(t)
   }, [confirmDelete])
 
+  const partial = hits.length < s.items.length
+
   const openAll = () => {
-    for (const it of s.items) void chrome.tabs.create({ url: it.url, active: false })
-    notify(`已打开 ${s.items.length} 个标签页`)
+    for (const i of hits) void chrome.tabs.create({ url: s.items[i].url, active: false })
+    notify(`已打开 ${hits.length} 个标签页`)
   }
 
   const remove = () => {
@@ -95,9 +128,13 @@ function StashCard({ stash: s, saved, open, onToggle, notify }: {
     if (name !== s.name) void send({ type: 'ops', ops: [makeStashUpdateOp(s.id, { name })] })
   }
 
+  const hoverOnly = 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+
   return (
-    <li className="rounded-lg border border-zinc-200 dark:border-zinc-800">
-      <div className={`group flex items-center gap-1.5 py-1.5 pr-2 pl-1.5 ${open ? 'border-b border-zinc-100 dark:border-zinc-800' : ''}`}>
+    <li className="overflow-hidden rounded-lg border border-sage bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div
+        className={`group flex items-center gap-1.5 py-1.5 pr-2 pl-1.5 ${open ? 'border-b border-sage bg-sage/40 dark:border-zinc-800 dark:bg-zinc-800/40' : ''}`}
+      >
         {renaming ? (
           <input
             className="input h-7 min-w-0 flex-1 py-0 text-sm"
@@ -113,21 +150,33 @@ function StashCard({ stash: s, saved, open, onToggle, notify }: {
           />
         ) : (
           <>
-            <button className="flex min-w-0 flex-1 items-center gap-1.5 text-left" onClick={onToggle} aria-expanded={open} title={open ? '收起' : '展开'}>
-              <ChevronRightIcon width={14} height={14} className={`shrink-0 text-zinc-400 transition ${open ? 'rotate-90' : ''}`} />
-              <span className="truncate text-sm font-medium">{stashLabel(s)}</span>
-              <span className="shrink-0 text-xs text-zinc-400">{s.items.length}</span>
+            <button
+              className={`flex min-w-0 flex-1 items-center gap-1.5 text-left ${onToggle ? '' : 'cursor-default'}`}
+              onClick={onToggle}
+              aria-expanded={open}
+              title={onToggle ? (open ? '收起' : '展开') : undefined}
+            >
+              <ChevronRightIcon width={14} height={14} className={`shrink-0 text-charcoal/40 transition dark:text-zinc-500 ${open ? 'rotate-90' : ''}`} />
+              <span className="truncate text-sm font-medium text-forest dark:text-zinc-100">
+                <Highlight text={stashLabel(s)} query={query} />
+              </span>
+              <span className="shrink-0 text-xs text-charcoal/45 dark:text-zinc-500">{partial ? `${hits.length}/${s.items.length}` : s.items.length}</span>
             </button>
-            <button className="btn-ghost shrink-0 p-1 opacity-0 group-hover:opacity-100" title="重命名" onClick={() => setRenaming(true)}>
+            <button className={`btn-ghost shrink-0 p-1 ${hoverOnly}`} title="重命名" onClick={() => setRenaming(true)}>
               <EditIcon width={14} height={14} />
             </button>
           </>
         )}
-        <button className="btn-ghost shrink-0 px-2 py-0.5 text-xs" onClick={openAll}>
-          全部打开
+        <button
+          className="inline-flex shrink-0 items-center gap-1 rounded-md bg-mint/45 py-1 pr-2 pl-1.5 text-xs font-medium text-forest transition hover:bg-forest hover:text-white dark:bg-mint/15 dark:text-mint dark:hover:bg-mint dark:hover:text-forest"
+          title="在新标签页中打开"
+          onClick={openAll}
+        >
+          <ExternalLinkIcon width={12} height={12} />
+          {partial ? `打开 ${hits.length} 个` : '全部打开'}
         </button>
         <button
-          className={`btn-danger shrink-0 p-1 ${confirmDelete ? 'bg-red-50 px-2 text-xs dark:bg-red-950' : ''}`}
+          className={`btn-danger shrink-0 p-1 ${confirmDelete ? 'bg-red-50 px-2 text-xs dark:bg-red-950' : hoverOnly}`}
           title="删除这组暂存"
           onClick={remove}
         >
@@ -136,16 +185,17 @@ function StashCard({ stash: s, saved, open, onToggle, notify }: {
       </div>
       {open && (
         <ul className="px-1 py-1">
-          {s.items.map((it, i) => (
-            <StashRow key={`${i}-${it.url}`} item={it} saved={saved.has(it.url)} onRemove={() => removeItem(i)} notify={notify} />
-          ))}
+          {hits.map((i) => {
+            const it = s.items[i]
+            return <StashRow key={`${i}-${it.url}`} item={it} query={query} saved={saved.has(it.url)} onRemove={() => removeItem(i)} notify={notify} />
+          })}
         </ul>
       )}
     </li>
   )
 }
 
-function StashRow({ item, saved, onRemove, notify }: { item: StashItem; saved: boolean; onRemove(): void; notify(msg: string): void }) {
+function StashRow({ item, query, saved, onRemove, notify }: { item: StashItem; query: string; saved: boolean; onRemove(): void; notify(msg: string): void }) {
   const open = (e: MouseEvent) => {
     const background = e.ctrlKey || e.metaKey || e.button === 1
     void chrome.tabs.create({ url: item.url, active: !background })
@@ -162,10 +212,10 @@ function StashRow({ item, saved, onRemove, notify }: { item: StashItem; saved: b
   }
 
   return (
-    <li className="group flex items-center gap-2.5 rounded-md px-2 py-0.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+    <li className="group hover-row flex items-center gap-2.5 rounded-md px-2 py-0.5">
       <Favicon url={item.url} size={16} />
       <button className="min-w-0 flex-1 -translate-y-px truncate py-0.5 text-left text-sm leading-5" onClick={open} onAuxClick={open} title={`${item.title}\n${item.url}`}>
-        {item.title || item.url}
+        <Highlight text={item.title || item.url} query={query} />
       </button>
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
         <button

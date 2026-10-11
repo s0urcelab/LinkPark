@@ -2,7 +2,7 @@ import { describeSync, type SyncSummary } from '../lib/syncStatus'
 
 const dot = {
   ok: 'bg-emerald-500',
-  busy: 'bg-indigo-500 animate-pulse',
+  busy: 'bg-forest animate-pulse dark:bg-mint',
   warn: 'bg-amber-500',
   error: 'bg-red-500',
 }

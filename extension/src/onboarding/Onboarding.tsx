@@ -43,7 +43,7 @@ export function Onboarding() {
         {STEPS.map((s, i) => (
           <li
             key={s.key}
-            className={`flex-1 border-t-2 pt-2 ${i <= current ? 'border-indigo-600 text-indigo-600' : 'border-zinc-200 text-zinc-400 dark:border-zinc-700'}`}
+            className={`flex-1 border-t-2 pt-2 ${i <= current ? 'border-forest text-forest dark:border-mint dark:text-mint' : 'border-zinc-200 text-zinc-400 dark:border-zinc-700'}`}
           >
             {i + 1}. {s.label}
           </li>

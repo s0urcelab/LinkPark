@@ -37,7 +37,7 @@ export function TagInput({ value, onChange, suggestions = [], autoFocus }: Props
     <div className="relative">
       <div className="input flex flex-wrap items-center gap-1 py-1.5">
         {value.map((t) => (
-          <span key={t} className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-1.5 py-0.5 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+          <span key={t} className="inline-flex items-center gap-1 rounded-md bg-mint/40 px-1.5 py-0.5 text-xs text-forest dark:bg-mint/15 dark:text-mint">
             {t}
             <button type="button" className="opacity-60 hover:opacity-100" onClick={() => onChange(value.filter((x) => x !== t))} aria-label={`移除 ${t}`}>
               ×

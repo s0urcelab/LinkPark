@@ -12,7 +12,8 @@ export type PopupTab = 'all' | 'stash'
 /** Last popup view, restored the next time it opens. */
 export interface PopupState {
   tab: PopupTab
-  query: string
+  /** Each view keeps its own search. */
+  queries: Record<PopupTab, string>
   tags: string[]
   scrollTop: number
   limit: number
@@ -35,7 +36,7 @@ export type StorageKey = keyof StorageSchema
 
 export const defaults: StorageSchema = {
   prefs: { sort: 'default', compact: false },
-  popupState: { tab: 'all', query: '', tags: [], scrollTop: 0, limit: 0, stashOpen: [] },
+  popupState: { tab: 'all', queries: { all: '', stash: '' }, tags: [], scrollTop: 0, limit: 0, stashOpen: [] },
   settings: { serverUrl: '', token: '' },
   cache: { version: 0, bookmarks: {}, stashes: {}, tags: {} },
   outbox: [],

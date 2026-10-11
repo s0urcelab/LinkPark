@@ -61,6 +61,18 @@ export const StarIcon = (p: P) => (
 export const XIcon = (p: P) => (
   <svg {...base} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>
 )
+export const ChevronDownIcon = (p: P) => (
+  <svg {...base} {...p}><path d="m6 9 6 6 6-6" /></svg>
+)
+export const CheckIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M20 6 9 17l-5-5" /></svg>
+)
+export const SortIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M3 6h13M3 12h9M3 18h5M17 10v10M14 17l3 3 3-3" /></svg>
+)
+export const ExternalLinkIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
+)
 export const ArchiveIcon = (p: P) => (
   <svg {...base} {...p}><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4" /></svg>
 )

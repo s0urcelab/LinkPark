@@ -20,3 +20,32 @@ export function defaultStashName(ts: number): string {
 export function stashLabel(s: Stash): string {
   return s.name || new Date(s.created_at).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
+
+export interface StashMatch {
+  stash: Stash
+  /** Indices into `stash.items` to show, in order. */
+  hits: number[]
+}
+
+/**
+ * Groups with items whose title or URL contains the query. A group whose name matches
+ * keeps all of its items, since the user is looking for that group.
+ */
+export function filterStashes(stashes: Stash[], query: string): StashMatch[] {
+  const q = query.trim().toLowerCase()
+  const all = (s: Stash) => s.items.map((_, i) => i)
+  if (!q) return stashes.map((stash) => ({ stash, hits: all(stash) }))
+  const out: StashMatch[] = []
+  for (const stash of stashes) {
+    if (stashLabel(stash).toLowerCase().includes(q)) {
+      out.push({ stash, hits: all(stash) })
+      continue
+    }
+    const hits = all(stash).filter((i) => {
+      const it = stash.items[i]
+      return it.title.toLowerCase().includes(q) || it.url.toLowerCase().includes(q)
+    })
+    if (hits.length) out.push({ stash, hits })
+  }
+  return out
+}
