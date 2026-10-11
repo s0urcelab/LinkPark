@@ -120,26 +120,27 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		}
 		since = n
 	}
-	bookmarks, version, err := s.store.ListSince(r.Context(), since)
+	changes, err := s.store.Changes(r.Context(), since)
 	if err != nil {
 		s.storeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"version": version, "full": since == 0, "bookmarks": bookmarks})
+	writeJSON(w, http.StatusOK, changes)
 }
 
 func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Bookmarks []model.ImportItem `json:"bookmarks"`
+		Tags      []model.TagMeta    `json:"tags"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
-	if len(req.Bookmarks) > maxImportItems {
+	if len(req.Bookmarks) > maxImportItems || len(req.Tags) > maxImportItems {
 		writeError(w, http.StatusRequestEntityTooLarge, "too many bookmarks in one request")
 		return
 	}
-	res, err := s.store.Import(r.Context(), req.Bookmarks)
+	res, err := s.store.Import(r.Context(), req.Bookmarks, req.Tags)
 	if err != nil {
 		s.storeError(w, err)
 		return

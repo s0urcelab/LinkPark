@@ -7,12 +7,17 @@ export interface Prefs {
   compact: boolean
 }
 
+export type PopupTab = 'all' | 'stash'
+
 /** Last popup view, restored the next time it opens. */
 export interface PopupState {
+  tab: PopupTab
   query: string
   tags: string[]
   scrollTop: number
   limit: number
+  /** Expanded stash groups; the rest show only their header. */
+  stashOpen: string[]
 }
 
 export interface StorageSchema {
@@ -29,10 +34,10 @@ export interface StorageSchema {
 export type StorageKey = keyof StorageSchema
 
 export const defaults: StorageSchema = {
-  prefs: { sort: 'added', compact: false },
-  popupState: { query: '', tags: [], scrollTop: 0, limit: 0 },
+  prefs: { sort: 'default', compact: false },
+  popupState: { tab: 'all', query: '', tags: [], scrollTop: 0, limit: 0, stashOpen: [] },
   settings: { serverUrl: '', token: '' },
-  cache: { version: 0, bookmarks: {} },
+  cache: { version: 0, bookmarks: {}, stashes: {}, tags: {} },
   outbox: [],
   failed: [],
   syncState: { status: 'idle', attempt: 0 },
@@ -41,7 +46,12 @@ export const defaults: StorageSchema = {
 
 export async function getItem<K extends StorageKey>(key: K): Promise<StorageSchema[K]> {
   const res = await chrome.storage.local.get(key)
-  return (res[key] as StorageSchema[K] | undefined) ?? defaults[key]
+  const stored = res[key] as StorageSchema[K] | undefined
+  const def = defaults[key]
+  if (stored === undefined) return def
+  // Fill fields added after the value was first stored.
+  if (!Array.isArray(def) && typeof stored === 'object' && stored !== null) return { ...def, ...stored }
+  return stored
 }
 
 export async function setItem<K extends StorageKey>(key: K, value: StorageSchema[K]): Promise<void> {

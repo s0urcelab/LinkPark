@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from 'react'
-import { normalizeTags } from '../lib/ops'
+import { normalizeTags } from '../lib/tags'
 
 interface Props {
   value: string[]

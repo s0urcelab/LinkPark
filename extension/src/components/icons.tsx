@@ -40,3 +40,27 @@ export const CompactIcon = (p: P) => (
 export const RefreshIcon = (p: P) => (
   <svg {...base} {...p}><path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" /></svg>
 )
+export const PinIcon = ({ filled, ...p }: P & { filled?: boolean }) => (
+  <svg {...base} {...p}>
+    <path d="M12 17v5" />
+    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z" fill={filled ? 'currentColor' : 'none'} />
+  </svg>
+)
+export const ChevronRightIcon = (p: P) => (
+  <svg {...base} {...p}><path d="m9 18 6-6-6-6" /></svg>
+)
+export const GripIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" /><circle cx="9" cy="12" r="1" />
+    <circle cx="15" cy="12" r="1" /><circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" />
+  </svg>
+)
+export const StarIcon = (p: P) => (
+  <svg {...base} {...p}><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" /></svg>
+)
+export const XIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>
+)
+export const ArchiveIcon = (p: P) => (
+  <svg {...base} {...p}><rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4" /></svg>
+)

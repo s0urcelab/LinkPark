@@ -1,6 +1,7 @@
 import type { SortKey } from '../lib/ops'
 
 const OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'default', label: '默认' },
   { key: 'added', label: '最近添加' },
   { key: 'visits', label: '访问频率' },
   { key: 'title', label: '名称' },

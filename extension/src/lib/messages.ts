@@ -1,20 +1,28 @@
-import type { ImportItem, ImportResponse, UpdatePayload } from './types'
+import type { ImportPlan } from './importer'
+import type { ImportResponse, Op, UpdatePayload } from './types'
 
 export type Message =
   | { type: 'add'; url: string; title: string; favicon?: string; tags?: string[] }
   | { type: 'update'; id: string; patch: UpdatePayload }
   | { type: 'delete'; id: string }
+  /** Prebuilt ops from the UI (reordering, tag management, stashes). */
+  | { type: 'ops'; ops: Op[] }
+  /** Saves every web tab of the window; the sender must already hold the "tabs" permission. */
+  | { type: 'stashWindow'; windowId: number }
   | { type: 'sync' }
   | { type: 'resync' }
-  | { type: 'import'; items: ImportItem[] }
+  | ({ type: 'import' } & ImportPlan)
   | { type: 'retryFailed' }
   | { type: 'discardFailed' }
   | { type: 'settingsChanged'; serverChanged: boolean }
 
 export type AddResult = { status: 'added'; id: string } | { status: 'exists'; id: string } | { status: 'unconfigured' }
 
+export type StashResult = { status: 'stashed'; count: number } | { status: 'empty' } | { status: 'unconfigured' }
+
 export interface ReplyMap {
   add: AddResult
+  stashWindow: StashResult
   import: Omit<ImportResponse, 'version'>
 }
 

@@ -26,8 +26,17 @@ func mustJSON(v any) json.RawMessage {
 }
 
 func createOp(opID, id, url string, tags ...string) model.Op {
-	return model.Op{OpID: opID, Type: model.OpCreate, BookmarkID: id,
+	return model.Op{OpID: opID, Type: model.OpCreate, Entity: model.EntityBookmark, ID: id,
 		Payload: mustJSON(model.CreatePayload{URL: url, Title: "t " + url, Tags: tags})}
+}
+
+func changes(t *testing.T, s *Store, since int64) model.Changes {
+	t.Helper()
+	c, err := s.Changes(context.Background(), since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 func TestApplyOpsLifecycle(t *testing.T) {
@@ -45,10 +54,7 @@ func TestApplyOpsLifecycle(t *testing.T) {
 		t.Fatalf("unexpected: v=%d res=%+v", v1, res)
 	}
 
-	all, _, err := s.ListSince(ctx, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	all := changes(t, s, 0).Bookmarks
 	if len(all) != 2 || len(all[0].Tags) != 2 {
 		t.Fatalf("expected 2 bookmarks, tags deduped case-insensitively: %+v", all)
 	}
@@ -56,17 +62,15 @@ func TestApplyOpsLifecycle(t *testing.T) {
 	title := "renamed"
 	tags := []string{"x"}
 	_, v2, err := s.ApplyOps(ctx, []model.Op{
-		{OpID: "o3", Type: model.OpUpdate, BookmarkID: "b1", Payload: mustJSON(model.UpdatePayload{Title: &title, Tags: &tags})},
-		{OpID: "o4", Type: model.OpDelete, BookmarkID: "b2"},
+		{OpID: "o3", Type: model.OpUpdate, Entity: model.EntityBookmark, ID: "b1", Payload: mustJSON(model.UpdatePayload{Title: &title, Tags: &tags})},
+		{OpID: "o4", Type: model.OpDelete, Entity: model.EntityBookmark, ID: "b2"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	changed, cur, err := s.ListSince(ctx, v1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := changes(t, s, v1)
+	changed, cur := c.Bookmarks, c.Version
 	if cur != v2 || len(changed) != 2 {
 		t.Fatalf("expected 2 changes at v%d, got %d at v%d", v2, len(changed), cur)
 	}
@@ -83,7 +87,7 @@ func TestApplyOpsLifecycle(t *testing.T) {
 		}
 	}
 
-	full, _, _ := s.ListSince(ctx, 0)
+	full := changes(t, s, 0).Bookmarks
 	if len(full) != 1 {
 		t.Fatalf("full snapshot should omit tombstones, got %d", len(full))
 	}
@@ -118,13 +122,14 @@ func TestApplyOpsAtomic(t *testing.T) {
 	ctx := context.Background()
 	_, _, err := s.ApplyOps(ctx, []model.Op{
 		createOp("o1", "b1", "https://a.com"),
-		{OpID: "o2", Type: "bogus", BookmarkID: "b1"},
+		{OpID: "o2", Type: "bogus", Entity: model.EntityBookmark, ID: "b1"},
 	})
 	var ve *ValidationError
 	if !errors.As(err, &ve) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
-	all, v, _ := s.ListSince(ctx, 0)
+	c := changes(t, s, 0)
+	all, v := c.Bookmarks, c.Version
 	if len(all) != 0 || v != 0 {
 		t.Fatalf("batch should have rolled back: %d bookmarks, v=%d", len(all), v)
 	}
@@ -141,7 +146,7 @@ func TestDuplicateAndDeleteSemantics(t *testing.T) {
 	res, _, err := s.ApplyOps(ctx, []model.Op{
 		createOp("o1", "b1", "https://a.com"),
 		createOp("o2", "b2", "https://a.com"),
-		{OpID: "o3", Type: model.OpDelete, BookmarkID: "ghost"},
+		{OpID: "o3", Type: model.OpDelete, Entity: model.EntityBookmark, ID: "ghost"},
 		createOp("o4", "ghost", "https://ghost.com"),
 	})
 	if err != nil {
@@ -156,7 +161,7 @@ func TestDuplicateAndDeleteSemantics(t *testing.T) {
 
 	// After deleting, the same URL may be bookmarked again under a new id.
 	res, _, err = s.ApplyOps(ctx, []model.Op{
-		{OpID: "o5", Type: model.OpDelete, BookmarkID: "b1"},
+		{OpID: "o5", Type: model.OpDelete, Entity: model.EntityBookmark, ID: "b1"},
 		createOp("o6", "b3", "https://a.com"),
 	})
 	if err != nil || res[1].Status != model.StatusApplied {
@@ -175,15 +180,14 @@ func TestImport(t *testing.T) {
 		{URL: "https://b.com", Title: "b", Tags: []string{"技术"}},
 		{URL: "https://b.com", Title: "b dup", Tags: []string{"Go"}},
 		{URL: "  ", Title: "empty"},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.Imported != 1 || r.Skipped != 3 {
 		t.Fatalf("unexpected import result: %+v", r)
 	}
-	all, _, _ := s.ListSince(ctx, 0)
-	for _, b := range all {
+	for _, b := range changes(t, s, 0).Bookmarks {
 		if b.URL == "https://b.com" && len(b.Tags) != 2 {
 			t.Fatalf("in-batch duplicates should merge tags: %+v", b)
 		}

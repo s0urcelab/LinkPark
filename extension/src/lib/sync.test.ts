@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from './api'
-import { buildView, makeCreateOp, makeDeleteOp } from './ops'
+import { buildState, makeCreateOp, makeDeleteOp } from './ops'
 import { defaults, type StorageKey, type StorageSchema } from './storage'
 import { backoffDelay, createSyncEngine, type SyncDeps } from './sync'
 import type { Bookmark, Op, PullResponse } from './types'
@@ -31,11 +31,11 @@ function fakeServer() {
         if (applied.has(op.op_id)) return { op_id: op.op_id, status: 'replayed' as const }
         applied.add(op.op_id)
         version++
-        if (op.type === 'create') {
-          const p = op.payload as { url: string; title: string; tags: string[] }
-          rows[op.bookmark_id] = { id: op.bookmark_id, url: p.url, title: p.title, favicon: '', tags: p.tags, created_at: 1, updated_at: 1, version }
+        if (op.entity === 'bookmark' && op.type === 'create') {
+          const p = op.payload
+          rows[op.id] = { id: op.id, url: p.url, title: p.title, favicon: '', tags: p.tags, rank: p.rank, created_at: 1, updated_at: 1, version }
         } else if (op.type === 'delete') {
-          rows[op.bookmark_id] = { ...rows[op.bookmark_id], deleted_at: 1, version }
+          rows[op.id] = { ...rows[op.id], deleted_at: 1, version }
         }
         return { op_id: op.op_id, status: 'applied' as const }
       })
@@ -44,7 +44,7 @@ function fakeServer() {
     async pull(_s: unknown, since: number): Promise<PullResponse> {
       if (this.offline) throw new ApiError(0, 'offline')
       const bookmarks = Object.values(rows).filter((b) => (b.version ?? 0) > since && (since > 0 || !b.deleted_at))
-      return { version, full: since === 0, bookmarks }
+      return { version, full: since === 0, bookmarks, stashes: [], tags: [] }
     },
   }
 }
@@ -75,21 +75,21 @@ describe('sync engine', () => {
 
   it('pushes the outbox, pulls, and keeps the view stable', async () => {
     const engine = createSyncEngine(deps)
-    const op = makeCreateOp({ url: 'https://a.com', title: 'A', tags: ['dev'] })
+    const op = makeCreateOp({ url: 'https://a.com', title: 'A', tags: ['dev'], rank: 'V' })
     await engine.enqueue(op)
-    expect(buildView(store.data.cache, store.data.outbox)).toHaveLength(1)
+    expect(buildState(store.data.cache, store.data.outbox).bookmarks).toHaveLength(1)
 
     await engine.sync()
     expect(store.data.outbox).toHaveLength(0)
     expect(store.data.cache.version).toBe(1)
-    expect(buildView(store.data.cache, store.data.outbox).map((b) => b.url)).toEqual(['https://a.com'])
+    expect(buildState(store.data.cache, store.data.outbox).bookmarks.map((b) => b.url)).toEqual(['https://a.com'])
     expect(store.data.syncState.status).toBe('idle')
   })
 
   it('keeps ops and schedules exponential retries while offline, then recovers', async () => {
     const engine = createSyncEngine(deps)
     server.offline = true
-    await engine.enqueue(makeCreateOp({ url: 'https://a.com', title: 'A' }))
+    await engine.enqueue(makeCreateOp({ url: 'https://a.com', title: 'A', rank: 'V' }))
 
     await engine.sync()
     await engine.sync()
@@ -107,7 +107,7 @@ describe('sync engine', () => {
 
   it('does not double-apply when the response was lost after the server committed', async () => {
     const engine = createSyncEngine(deps)
-    const op = makeCreateOp({ url: 'https://a.com', title: 'A' })
+    const op = makeCreateOp({ url: 'https://a.com', title: 'A', rank: 'V' })
     await engine.enqueue(op)
     const realPull = server.pull.bind(server)
     server.pull = async () => {
@@ -140,7 +140,7 @@ describe('sync engine', () => {
     server.postOps = async () => {
       throw new ApiError(401, 'unauthorized')
     }
-    await engine.enqueue(makeCreateOp({ url: 'https://a.com', title: 'A' }))
+    await engine.enqueue(makeCreateOp({ url: 'https://a.com', title: 'A', rank: 'V' }))
     await engine.sync()
     expect(store.data.outbox).toHaveLength(1)
     expect(store.data.syncState.status).toBe('auth_error')
@@ -149,10 +149,10 @@ describe('sync engine', () => {
 
   it('applies remote deletions from incremental pulls', async () => {
     const engine = createSyncEngine(deps)
-    const op = makeCreateOp({ url: 'https://a.com', title: 'A' })
+    const op = makeCreateOp({ url: 'https://a.com', title: 'A', rank: 'V' })
     await engine.enqueue(op)
     await engine.sync()
-    await server.postOps(null, [makeDeleteOp(op.bookmark_id)])
+    await server.postOps(null, [makeDeleteOp(op.id)])
     await engine.sync()
     expect(store.data.cache.bookmarks).toEqual({})
   })

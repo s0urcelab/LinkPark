@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ImportPanel } from '../components/ImportPanel'
 import { RefreshIcon } from '../components/icons'
 import { SettingsForm } from '../components/SettingsForm'
@@ -6,6 +6,11 @@ import { SyncIndicator } from '../components/SyncIndicator'
 import { useStorage } from '../components/useStorage'
 import { send } from '../lib/messages'
 import { isConfigured } from '../lib/storage'
+import { TagManager } from './TagManager'
+
+type View = 'settings' | 'tags'
+
+const viewFromHash = (): View => (location.hash === '#tags' ? 'tags' : 'settings')
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -17,17 +22,56 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function Options() {
+  const [view, setView] = useState<View>(viewFromHash)
+
+  useEffect(() => {
+    const onHash = () => setView(viewFromHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  const views: { key: View; label: string }[] = [
+    { key: 'settings', label: '设置' },
+    { key: 'tags', label: '标签管理' },
+  ]
+
   return (
     <main className="mx-auto max-w-2xl space-y-6 px-6 py-10">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">LinkPark 设置</h1>
-        <p className="mt-1 text-sm text-zinc-500">连接你的自托管服务端，书签会自动在各设备间同步。</p>
+      <header className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">LinkPark</h1>
+          <p className="mt-1 text-sm text-zinc-500">连接你的自托管服务端，书签会自动在各设备间同步。</p>
+        </div>
+        <nav className="inline-flex shrink-0 rounded-lg bg-zinc-100 p-0.5 text-sm dark:bg-zinc-800">
+          {views.map((v) => (
+            <a
+              key={v.key}
+              href={v.key === 'tags' ? '#tags' : '#'}
+              aria-current={view === v.key ? 'page' : undefined}
+              className={`rounded-md px-3 py-1 transition ${
+                view === v.key
+                  ? 'bg-white font-medium text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+              }`}
+            >
+              {v.label}
+            </a>
+          ))}
+        </nav>
       </header>
-      <Section title="服务端">
-        <SettingsForm />
-      </Section>
-      <SyncSection />
-      <ImportSection />
+      {view === 'settings' ? (
+        <>
+          <Section title="服务端">
+            <SettingsForm />
+          </Section>
+          <SyncSection />
+          <ImportSection />
+        </>
+      ) : (
+        <Section title="标签管理">
+          <TagManager />
+        </Section>
+      )}
     </main>
   )
 }
@@ -104,11 +148,12 @@ function ImportSection() {
   if (!onboarding || !settings) return null
 
   return (
-    <Section title="导入浏览器书签">
-      {onboarding.importDone ? (
-        <p className="text-sm text-zinc-500">已完成导入。</p>
-      ) : isConfigured(settings) ? (
-        <ImportPanel />
+    <Section title="导入书签">
+      {isConfigured(settings) ? (
+        <div className="space-y-3">
+          {onboarding.importDone && <p className="text-sm text-zinc-500">已导入过；再次导入时重复的链接会被跳过。</p>}
+          <ImportPanel />
+        </div>
       ) : (
         <p className="text-sm text-zinc-500">请先配置服务端。</p>
       )}

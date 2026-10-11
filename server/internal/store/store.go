@@ -129,8 +129,9 @@ func (s *Store) ApplyOps(ctx context.Context, ops []model.Op) ([]model.OpResult,
 		if strings.TrimSpace(op.OpID) == "" {
 			return nil, 0, invalid("ops[%d]: op_id is required", i)
 		}
-		if strings.TrimSpace(op.BookmarkID) == "" {
-			return nil, 0, invalid("ops[%d]: bookmark_id is required", i)
+		// Tag ops address the virtual "untagged" tag with an empty id.
+		if op.Entity != model.EntityTag && strings.TrimSpace(op.ID) == "" {
+			return nil, 0, invalid("ops[%d]: id is required", i)
 		}
 	}
 
@@ -152,15 +153,15 @@ func (s *Store) ApplyOps(ctx context.Context, ops []model.Op) ([]model.OpResult,
 		}
 
 		var status model.OpStatus
-		switch op.Type {
-		case model.OpCreate:
-			status, err = s.applyCreate(ctx, tx, op)
-		case model.OpUpdate:
-			status, err = s.applyUpdate(ctx, tx, op)
-		case model.OpDelete:
-			status, err = s.applyDelete(ctx, tx, op)
+		switch op.Entity {
+		case model.EntityBookmark:
+			status, err = s.applyBookmarkOp(ctx, tx, op)
+		case model.EntityTag:
+			status, err = s.applyTagOp(ctx, tx, op)
+		case model.EntityStash:
+			status, err = s.applyStashOp(ctx, tx, op)
 		default:
-			err = invalid("unknown op type %q", op.Type)
+			err = invalid("unknown entity %q", op.Entity)
 		}
 		if err != nil {
 			var ve *ValidationError
@@ -198,6 +199,18 @@ func decodePayload(raw json.RawMessage, v any) error {
 	return nil
 }
 
+func (s *Store) applyBookmarkOp(ctx context.Context, tx *sql.Tx, op model.Op) (model.OpStatus, error) {
+	switch op.Type {
+	case model.OpCreate:
+		return s.applyCreate(ctx, tx, op)
+	case model.OpUpdate:
+		return s.applyUpdate(ctx, tx, op)
+	case model.OpDelete:
+		return s.applyDelete(ctx, tx, op)
+	}
+	return "", invalid("unknown op type %q", op.Type)
+}
+
 func (s *Store) applyCreate(ctx context.Context, tx *sql.Tx, op model.Op) (model.OpStatus, error) {
 	var p model.CreatePayload
 	if err := decodePayload(op.Payload, &p); err != nil {
@@ -212,18 +225,21 @@ func (s *Store) applyCreate(ctx context.Context, tx *sql.Tx, op model.Op) (model
 		return "", err
 	}
 	title := truncate(strings.TrimSpace(p.Title), maxTitleLen)
+	if !validRank(p.Rank) {
+		return "", invalid("bad rank %q", p.Rank)
+	}
 
 	var existingID string
 	err = tx.QueryRowContext(ctx, `SELECT id FROM bookmarks WHERE url = ? AND deleted_at IS NULL`, url).Scan(&existingID)
 	switch {
-	case err == nil && existingID != op.BookmarkID:
+	case err == nil && existingID != op.ID:
 		return model.StatusDuplicate, nil
 	case err != nil && !errors.Is(err, sql.ErrNoRows):
 		return "", err
 	}
 
 	var deleted sql.NullInt64
-	err = tx.QueryRowContext(ctx, `SELECT deleted_at FROM bookmarks WHERE id = ?`, op.BookmarkID).Scan(&deleted)
+	err = tx.QueryRowContext(ctx, `SELECT deleted_at FROM bookmarks WHERE id = ?`, op.ID).Scan(&deleted)
 	if err == nil && deleted.Valid {
 		// A delete for this id already happened; don't resurrect it.
 		return model.StatusIgnored, nil
@@ -242,15 +258,15 @@ func (s *Store) applyCreate(ctx context.Context, tx *sql.Tx, op model.Op) (model
 		createdAt = now
 	}
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO bookmarks (id, url, title, favicon, created_at, updated_at, version)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (id) DO UPDATE SET url = excluded.url, title = excluded.title,
-			favicon = excluded.favicon, updated_at = excluded.updated_at, version = excluded.version`,
-		op.BookmarkID, url, title, truncate(p.Favicon, maxURLLen), createdAt, now, version)
+		INSERT INTO bookmarks (id, url, title, favicon, rank, created_at, updated_at, version)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (id) DO UPDATE SET url = excluded.url, title = excluded.title, favicon = excluded.favicon,
+			rank = excluded.rank, updated_at = excluded.updated_at, version = excluded.version`,
+		op.ID, url, title, truncate(p.Favicon, maxURLLen), p.Rank, createdAt, now, version)
 	if err != nil {
 		return "", err
 	}
-	if err := setTags(ctx, tx, op.BookmarkID, tags); err != nil {
+	if err := setTags(ctx, tx, op.ID, tags); err != nil {
 		return "", err
 	}
 	return model.StatusApplied, nil
@@ -262,9 +278,9 @@ func (s *Store) applyUpdate(ctx context.Context, tx *sql.Tx, op model.Op) (model
 		return "", err
 	}
 
-	var url, title, favicon string
-	err := tx.QueryRowContext(ctx, `SELECT url, title, favicon FROM bookmarks WHERE id = ? AND deleted_at IS NULL`, op.BookmarkID).
-		Scan(&url, &title, &favicon)
+	var url, title, favicon, rank string
+	err := tx.QueryRowContext(ctx, `SELECT url, title, favicon, rank FROM bookmarks WHERE id = ? AND deleted_at IS NULL`, op.ID).
+		Scan(&url, &title, &favicon, &rank)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.StatusIgnored, nil
 	}
@@ -279,7 +295,7 @@ func (s *Store) applyUpdate(ctx context.Context, tx *sql.Tx, op model.Op) (model
 		}
 		if u != url {
 			var other int
-			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookmarks WHERE url = ? AND deleted_at IS NULL AND id <> ?`, u, op.BookmarkID).Scan(&other); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookmarks WHERE url = ? AND deleted_at IS NULL AND id <> ?`, u, op.ID).Scan(&other); err != nil {
 				return "", err
 			}
 			if other > 0 {
@@ -294,6 +310,12 @@ func (s *Store) applyUpdate(ctx context.Context, tx *sql.Tx, op model.Op) (model
 	if p.Favicon != nil {
 		favicon = truncate(*p.Favicon, maxURLLen)
 	}
+	if p.Rank != nil {
+		if !validRank(*p.Rank) {
+			return "", invalid("bad rank %q", *p.Rank)
+		}
+		rank = *p.Rank
+	}
 	var tags []string
 	if p.Tags != nil {
 		if tags, err = normalizeTags(*p.Tags); err != nil {
@@ -305,12 +327,12 @@ func (s *Store) applyUpdate(ctx context.Context, tx *sql.Tx, op model.Op) (model
 	if err != nil {
 		return "", err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE bookmarks SET url = ?, title = ?, favicon = ?, updated_at = ?, version = ? WHERE id = ?`,
-		url, title, favicon, s.nowMs(), version, op.BookmarkID); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE bookmarks SET url = ?, title = ?, favicon = ?, rank = ?, updated_at = ?, version = ? WHERE id = ?`,
+		url, title, favicon, rank, s.nowMs(), version, op.ID); err != nil {
 		return "", err
 	}
 	if p.Tags != nil {
-		if err := setTags(ctx, tx, op.BookmarkID, tags); err != nil {
+		if err := setTags(ctx, tx, op.ID, tags); err != nil {
 			return "", err
 		}
 	}
@@ -319,7 +341,7 @@ func (s *Store) applyUpdate(ctx context.Context, tx *sql.Tx, op model.Op) (model
 
 func (s *Store) applyDelete(ctx context.Context, tx *sql.Tx, op model.Op) (model.OpStatus, error) {
 	var alive int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookmarks WHERE id = ? AND deleted_at IS NULL`, op.BookmarkID).Scan(&alive); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookmarks WHERE id = ? AND deleted_at IS NULL`, op.ID).Scan(&alive); err != nil {
 		return "", err
 	}
 	version, err := bumpVersion(ctx, tx)
@@ -333,17 +355,17 @@ func (s *Store) applyDelete(ctx context.Context, tx *sql.Tx, op model.Op) (model
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO bookmarks (id, url, created_at, updated_at, deleted_at, version)
 			VALUES (?, '', ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
-			op.BookmarkID, now, now, now, version)
+			op.ID, now, now, now, version)
 		if err != nil {
 			return "", err
 		}
 		return model.StatusIgnored, nil
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE bookmarks SET deleted_at = ?, updated_at = ?, version = ? WHERE id = ?`,
-		now, now, version, op.BookmarkID); err != nil {
+		now, now, version, op.ID); err != nil {
 		return "", err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM bookmark_tags WHERE bookmark_id = ?`, op.BookmarkID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM bookmark_tags WHERE bookmark_id = ?`, op.ID); err != nil {
 		return "", err
 	}
 	return model.StatusApplied, nil
@@ -371,33 +393,48 @@ func cleanupOrphanTags(ctx context.Context, tx *sql.Tx) error {
 	return err
 }
 
-// ListSince returns bookmarks changed after the given version. since <= 0 means a
-// full snapshot, which omits tombstones.
-func (s *Store) ListSince(ctx context.Context, since int64) ([]model.Bookmark, int64, error) {
+// Changes returns every bookmark and stash changed after the given version, plus the
+// complete tag metadata. since <= 0 means a full snapshot, which omits tombstones.
+func (s *Store) Changes(ctx context.Context, since int64) (model.Changes, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return nil, 0, err
+		return model.Changes{}, err
 	}
 	defer tx.Rollback()
 
-	var version int64
-	if err := tx.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'version'`).Scan(&version); err != nil {
-		return nil, 0, err
+	out := model.Changes{Full: since <= 0}
+	if err := tx.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'version'`).Scan(&out.Version); err != nil {
+		return model.Changes{}, err
 	}
+	if out.Bookmarks, err = listBookmarks(ctx, tx, since); err != nil {
+		return model.Changes{}, err
+	}
+	if out.Tags, err = listTagMeta(ctx, tx); err != nil {
+		return model.Changes{}, err
+	}
+	if out.Stashes, err = listStashes(ctx, tx, since); err != nil {
+		return model.Changes{}, err
+	}
+	return out, nil
+}
 
-	q := `
-		SELECT b.id, b.url, b.title, b.favicon, b.created_at, b.updated_at, b.deleted_at, b.version,
-			COALESCE((SELECT group_concat(t.name, char(31)) FROM bookmark_tags bt JOIN tags t ON t.id = bt.tag_id
-				WHERE bt.bookmark_id = b.id), '')
-		FROM bookmarks b WHERE b.version > ?`
+// changedSince filters a table to rows newer than since; full snapshots skip tombstones.
+func changedSince(since int64) string {
 	if since <= 0 {
-		q += ` AND b.deleted_at IS NULL`
+		return ` WHERE version > ? AND deleted_at IS NULL ORDER BY version`
 	}
-	q += ` ORDER BY b.version`
+	return ` WHERE version > ? ORDER BY version`
+}
 
+func listBookmarks(ctx context.Context, tx *sql.Tx, since int64) ([]model.Bookmark, error) {
+	q := `
+		SELECT id, url, title, favicon, rank, created_at, updated_at, deleted_at, version,
+			COALESCE((SELECT group_concat(t.name, char(31)) FROM bookmark_tags bt JOIN tags t ON t.id = bt.tag_id
+				WHERE bt.bookmark_id = bookmarks.id), '')
+		FROM bookmarks` + changedSince(since)
 	rows, err := tx.QueryContext(ctx, q, since)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -406,8 +443,8 @@ func (s *Store) ListSince(ctx context.Context, since int64) ([]model.Bookmark, i
 		var b model.Bookmark
 		var deleted sql.NullInt64
 		var tags string
-		if err := rows.Scan(&b.ID, &b.URL, &b.Title, &b.Favicon, &b.CreatedAt, &b.UpdatedAt, &deleted, &b.Version, &tags); err != nil {
-			return nil, 0, err
+		if err := rows.Scan(&b.ID, &b.URL, &b.Title, &b.Favicon, &b.Rank, &b.CreatedAt, &b.UpdatedAt, &deleted, &b.Version, &tags); err != nil {
+			return nil, err
 		}
 		if deleted.Valid {
 			b.DeletedAt = &deleted.Int64
@@ -419,7 +456,7 @@ func (s *Store) ListSince(ctx context.Context, since int64) ([]model.Bookmark, i
 		}
 		out = append(out, b)
 	}
-	return out, version, rows.Err()
+	return out, rows.Err()
 }
 
 func (s *Store) ListTags(ctx context.Context) ([]model.TagCount, error) {
@@ -444,8 +481,9 @@ func (s *Store) ListTags(ctx context.Context) ([]model.TagCount, error) {
 }
 
 // Import inserts bookmarks in one transaction, skipping URLs that already exist.
-// Duplicate URLs inside the batch are merged (tags unioned).
-func (s *Store) Import(ctx context.Context, items []model.ImportItem) (model.ImportResult, error) {
+// Duplicate URLs inside the batch are merged (tags unioned). Tag metadata is only added
+// for tags that have none yet, so re-importing never undoes the user's ordering.
+func (s *Store) Import(ctx context.Context, items []model.ImportItem, tags []model.TagMeta) (model.ImportResult, error) {
 	type entry struct {
 		item model.ImportItem
 		tags []string
@@ -498,15 +536,23 @@ func (s *Store) Import(ctx context.Context, items []model.ImportItem) (model.Imp
 			createdAt = now
 		}
 		title := truncate(strings.TrimSpace(e.item.Title), maxTitleLen)
+		rank := e.item.Rank
+		if !validRank(rank) {
+			rank = ""
+		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO bookmarks (id, url, title, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?)`,
-			id, url, title, createdAt, now, version); err != nil {
+			INSERT INTO bookmarks (id, url, title, rank, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			id, url, title, rank, createdAt, now, version); err != nil {
 			return model.ImportResult{}, err
 		}
 		if err := setTags(ctx, tx, id, e.tags); err != nil {
 			return model.ImportResult{}, err
 		}
 		imported++
+	}
+
+	if err := s.importTagMeta(ctx, tx, tags); err != nil {
+		return model.ImportResult{}, err
 	}
 
 	var version int64
@@ -530,22 +576,34 @@ func normalizeURL(raw string) (string, error) {
 	return u, nil
 }
 
+// normalizeTag strips control characters and surrounding space. Lenient mode
+// truncates over-long names instead of failing.
+func normalizeTag(raw string, lenient bool) (string, error) {
+	t := strings.TrimSpace(strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, raw))
+	if len([]rune(t)) > maxTagLen {
+		if !lenient {
+			return "", invalid("tag %q too long (max %d chars)", t, maxTagLen)
+		}
+		t = strings.TrimSpace(truncate(t, maxTagLen))
+	}
+	return t, nil
+}
+
 func normalizeTags(in []string) ([]string, error) {
 	seen := map[string]bool{}
 	out := []string{}
-	for _, t := range in {
-		t = strings.Map(func(r rune) rune {
-			if r < 0x20 || r == 0x7f {
-				return -1
-			}
-			return r
-		}, t)
-		t = strings.TrimSpace(t)
+	for _, raw := range in {
+		t, err := normalizeTag(raw, false)
+		if err != nil {
+			return nil, err
+		}
 		if t == "" {
 			continue
-		}
-		if len([]rune(t)) > maxTagLen {
-			return nil, invalid("tag %q too long (max %d chars)", t, maxTagLen)
 		}
 		key := strings.ToLower(t)
 		if seen[key] {
@@ -564,13 +622,13 @@ func normalizeTags(in []string) ([]string, error) {
 func lenientTags(in []string) []string {
 	out := []string{}
 	seen := map[string]bool{}
-	for _, t := range in {
-		norm, err := normalizeTags([]string{truncate(t, maxTagLen)})
-		if err != nil || len(norm) == 0 || seen[strings.ToLower(norm[0])] {
+	for _, raw := range in {
+		t, _ := normalizeTag(raw, true)
+		if t == "" || seen[strings.ToLower(t)] {
 			continue
 		}
-		seen[strings.ToLower(norm[0])] = true
-		out = append(out, norm[0])
+		seen[strings.ToLower(t)] = true
+		out = append(out, t)
 		if len(out) == maxTags {
 			break
 		}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useState, type HTMLAttributes, type MouseEvent } from 'react'
 import { Favicon } from '../components/Favicon'
 import { EditIcon, TrashIcon } from '../components/icons'
 import { TagInput } from '../components/TagInput'
@@ -17,6 +17,9 @@ interface Props {
   onEdit(): void
   onDone(): void
   onTagClick(tag: string): void
+  /** Extra attributes (e.g. drag handlers) and classes for the row element. */
+  rowProps?: HTMLAttributes<HTMLElement>
+  rowClass?: string
 }
 
 function hostname(url: string): string {
@@ -27,7 +30,7 @@ function hostname(url: string): string {
   }
 }
 
-export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, allTags, onEdit, onDone, onTagClick }: Props) {
+export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, allTags, onEdit, onDone, onTagClick, rowProps, rowClass = '' }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
@@ -69,7 +72,7 @@ export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, a
   if (compact) {
     const tooltip = [b.title, b.url, visits !== undefined ? `访问 ${visits} 次` : ''].filter(Boolean).join('\n')
     return (
-      <li className="group flex items-center gap-2.5 rounded-md px-2 py-0.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+      <li {...rowProps} className={`group flex items-center gap-2.5 rounded-md px-2 py-0.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ${rowClass}`}>
         <Favicon url={b.url} size={16} />
         {/* CJK glyphs sit low in the line box; nudge up to center against the icon */}
         <button className="min-w-0 flex-1 -translate-y-px truncate py-0.5 text-left text-sm leading-5" onClick={open} onAuxClick={open} title={tooltip}>
@@ -81,7 +84,7 @@ export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, a
   }
 
   return (
-    <li className="group flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+    <li {...rowProps} className={`group flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ${rowClass}`}>
       <div className="pt-0.5">
         <Favicon url={b.url} />
       </div>

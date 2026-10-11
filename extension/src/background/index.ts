@@ -1,13 +1,16 @@
 import { api } from '../lib/api'
-import type { AddResult, Message, Reply } from '../lib/messages'
-import { buildView, findByUrl, makeCreateOp, makeDeleteOp, makeUpdateOp } from '../lib/ops'
+import { rankImport, type ImportPlan } from '../lib/importer'
+import type { AddResult, Message, Reply, StashResult } from '../lib/messages'
+import { buildState, findByUrl, makeCreateOp, makeDeleteOp, makeStashCreateOp, makeUpdateOp, rankForTags } from '../lib/ops'
+import { stashItemsFromTabs, TABS_PERMISSION } from '../lib/stash'
 import { getItem, isConfigured, patchItem, setItem } from '../lib/storage'
 import { createSyncEngine } from '../lib/sync'
 import { describeSync, type SyncTone } from '../lib/syncStatus'
-import type { ImportItem } from '../lib/types'
+import type { UpdatePayload } from '../lib/types'
 
 const MENU_PAGE = 'linkpark-add-page'
 const MENU_LINK = 'linkpark-add-link'
+const MENU_STASH = 'linkpark-stash-window'
 const MENU_SYNC = 'linkpark-sync-now'
 const RETRY_ALARM = 'linkpark-retry'
 const PERIODIC_ALARM = 'linkpark-periodic'
@@ -97,26 +100,62 @@ async function addBookmark(input: { url: string; title: string; favicon?: string
   }
   const url = input.url.trim()
   if (!url) throw new Error('链接为空')
-  const view = buildView(await getItem('cache'), await getItem('outbox'))
-  const existing = findByUrl(view, url)
+  const { bookmarks } = buildState(await getItem('cache'), await getItem('outbox'))
+  const existing = findByUrl(bookmarks, url)
   if (existing) return { status: 'exists', id: existing.id }
 
-  const op = makeCreateOp({ ...input, url, title: input.title || url })
+  const op = makeCreateOp({ ...input, url, title: input.title || url, rank: rankForTags(bookmarks, input.tags ?? []) })
   await engine.enqueue(op)
   syncSoon()
-  return { status: 'added', id: op.bookmark_id }
+  return { status: 'added', id: op.id }
 }
 
-async function runImport(items: ImportItem[]): Promise<{ imported: number; skipped: number }> {
+/** A bookmark filed out of "未分类" moves next to its new tag; later tag edits keep its place. */
+async function updateBookmark(id: string, patch: UpdatePayload): Promise<void> {
+  if (patch.tags?.length && patch.rank === undefined) {
+    const { bookmarks } = buildState(await getItem('cache'), await getItem('outbox'))
+    const cur = bookmarks.find((b) => b.id === id)
+    if (cur && cur.tags.length === 0) {
+      patch = { ...patch, rank: rankForTags(bookmarks.filter((b) => b.id !== id), patch.tags) }
+    }
+  }
+  await engine.enqueue(makeUpdateOp(id, patch))
+  syncSoon()
+}
+
+async function stashWindow(windowId: number): Promise<StashResult> {
+  const settings = await getItem('settings')
+  if (!isConfigured(settings)) {
+    await chrome.runtime.openOptionsPage()
+    return { status: 'unconfigured' }
+  }
+  const items = stashItemsFromTabs(await chrome.tabs.query({ windowId }))
+  if (items.length === 0) return { status: 'empty' }
+  await engine.enqueue(makeStashCreateOp(items))
+  syncSoon()
+  return { status: 'stashed', count: items.length }
+}
+
+async function runImport(plan: ImportPlan): Promise<{ imported: number; skipped: number }> {
   const settings = await getItem('settings')
   if (!isConfigured(settings)) throw new Error('请先配置服务端')
+  const view = buildState(await getItem('cache'), await getItem('outbox'))
+  const tagRanks = Object.values(view.tags).map((t) => t.rank).filter(Boolean).sort()
+  const { items, tags } = rankImport(plan, {
+    lastBookmarkRank: view.bookmarks.at(-1)?.rank,
+    firstTagRank: tagRanks[0],
+    lastTagRank: tagRanks.at(-1),
+  })
   let imported = 0
   let skipped = 0
-  for (let i = 0; i < items.length; i += IMPORT_CHUNK) {
-    const res = await api.import(settings, items.slice(i, i + IMPORT_CHUNK))
+  for (let i = 0; i < items.length || i === 0; i += IMPORT_CHUNK) {
+    const res = await api.import(settings, items.slice(i, i + IMPORT_CHUNK), i === 0 ? tags : [])
     imported += res.imported
     skipped += res.skipped
   }
+  // Stashes list newest first; stepping the timestamps back keeps folder order top-down.
+  const now = Date.now()
+  for (const [i, s] of plan.stashes.entries()) await engine.enqueue(makeStashCreateOp(s.items, s.name, now - i))
   await patchItem('onboarding', { importDone: true })
   await engine.sync({ full: true })
   return { imported, skipped }
@@ -127,13 +166,17 @@ async function handle(msg: Message): Promise<unknown> {
     case 'add':
       return addBookmark(msg)
     case 'update':
-      await engine.enqueue(makeUpdateOp(msg.id, msg.patch))
-      syncSoon()
-      return
+      return updateBookmark(msg.id, msg.patch)
     case 'delete':
       await engine.enqueue(makeDeleteOp(msg.id))
       syncSoon()
       return
+    case 'ops':
+      for (const op of msg.ops) await engine.enqueue(op)
+      syncSoon()
+      return
+    case 'stashWindow':
+      return stashWindow(msg.windowId)
     case 'sync':
       void engine.sync()
       return
@@ -141,7 +184,7 @@ async function handle(msg: Message): Promise<unknown> {
       await engine.resetAndResync()
       return
     case 'import':
-      return runImport(msg.items)
+      return runImport({ items: msg.items, tags: msg.tags, stashes: msg.stashes })
     case 'retryFailed':
       await engine.retryFailed()
       return
@@ -169,6 +212,7 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: MENU_PAGE, title: '添加到 LinkPark', contexts: ['page'] })
     chrome.contextMenus.create({ id: MENU_LINK, title: '添加链接到 LinkPark', contexts: ['link'] })
+    chrome.contextMenus.create({ id: MENU_STASH, title: '暂存当前窗口的所有标签页', contexts: ['page', 'action'] })
     chrome.contextMenus.create({ id: MENU_SYNC, title: '立即同步', contexts: ['action'] })
   })
   if (reason === chrome.runtime.OnInstalledReason.INSTALL) {
@@ -178,6 +222,19 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === MENU_SYNC) return engine.sync({ full: true })
+  if (info.menuItemId === MENU_STASH) {
+    // The menu click is the user gesture; request before awaiting anything else.
+    const granted = chrome.permissions.request(TABS_PERMISSION).catch(() => false)
+    try {
+      if (!(await granted)) return await flash('×', '#dc2626')
+      const res = await stashWindow(tab?.windowId ?? chrome.windows.WINDOW_ID_CURRENT)
+      if (res.status === 'stashed') await flash(res.count > 99 ? '99+' : String(res.count), '#16a34a')
+      else if (res.status === 'empty') await flash('0', '#6b7280')
+    } catch {
+      await flash('×', '#dc2626')
+    }
+    return
+  }
   const isLink = info.menuItemId === MENU_LINK
   const url = (isLink ? info.linkUrl : info.pageUrl || tab?.url) ?? ''
   const title = isLink ? info.selectionText || url : tab?.title || url

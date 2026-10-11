@@ -71,8 +71,8 @@ func TestAuth(t *testing.T) {
 func TestOpsAndPull(t *testing.T) {
 	ts := newTestServer(t)
 	ops := map[string]any{"ops": []map[string]any{
-		{"op_id": "o1", "type": "create", "bookmark_id": "b1", "payload": map[string]any{"url": "https://a.com", "title": "A", "tags": []string{"dev"}}},
-		{"op_id": "o2", "type": "create", "bookmark_id": "b2", "payload": map[string]any{"url": "https://b.com", "title": "B"}},
+		{"op_id": "o1", "entity": "bookmark", "type": "create", "id": "b1", "payload": map[string]any{"url": "https://a.com", "title": "A", "tags": []string{"dev"}}},
+		{"op_id": "o2", "entity": "bookmark", "type": "create", "id": "b2", "payload": map[string]any{"url": "https://b.com", "title": "B"}},
 	}}
 	code, body := do(t, ts, "POST", "/api/v1/ops", testToken, ops)
 	if code != http.StatusOK || body["version"].(float64) != 2 {
@@ -80,7 +80,7 @@ func TestOpsAndPull(t *testing.T) {
 	}
 
 	code, body = do(t, ts, "POST", "/api/v1/ops", testToken, map[string]any{"ops": []map[string]any{
-		{"op_id": "o3", "type": "delete", "bookmark_id": "b2"},
+		{"op_id": "o3", "entity": "bookmark", "type": "delete", "id": "b2"},
 	}})
 	if code != http.StatusOK {
 		t.Fatalf("delete: %d %v", code, body)
@@ -98,7 +98,7 @@ func TestOpsAndPull(t *testing.T) {
 	}
 
 	code, body = do(t, ts, "POST", "/api/v1/ops", testToken, map[string]any{"ops": []map[string]any{
-		{"op_id": "o4", "type": "update", "bookmark_id": "b1"},
+		{"op_id": "o4", "entity": "bookmark", "type": "update", "id": "b1"},
 	}})
 	if code != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid op should be 422: %d %v", code, body)

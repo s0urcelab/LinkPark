@@ -10,6 +10,7 @@ CREATE TABLE bookmarks (
     url        TEXT NOT NULL,
     title      TEXT NOT NULL DEFAULT '',
     favicon    TEXT NOT NULL DEFAULT '',
+    rank       TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     deleted_at INTEGER,
@@ -31,6 +32,27 @@ CREATE TABLE bookmark_tags (
 );
 
 CREATE INDEX idx_bookmark_tags_tag ON bookmark_tags (tag_id);
+
+-- Keyed by tag name, or '' for the virtual "untagged" tag. Kept separate from `tags`,
+-- whose rows disappear with their last bookmark, so a tag re-created later keeps its place.
+CREATE TABLE tag_meta (
+    name       TEXT PRIMARY KEY COLLATE NOCASE,
+    rank       TEXT NOT NULL DEFAULT '',
+    pinned     INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE stashes (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL DEFAULT '',
+    items      TEXT NOT NULL DEFAULT '[]',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted_at INTEGER,
+    version    INTEGER NOT NULL
+);
+
+CREATE INDEX idx_stashes_version ON stashes (version);
 
 CREATE TABLE applied_ops (
     op_id      TEXT PRIMARY KEY,

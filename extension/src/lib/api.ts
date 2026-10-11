@@ -1,4 +1,4 @@
-import type { ImportItem, ImportResponse, Op, OpsResponse, PullResponse, Settings } from './types'
+import type { ImportItem, ImportResponse, Op, OpsResponse, PullResponse, Settings, TagMeta } from './types'
 
 /** status 0 means the request never got an HTTP response (offline, DNS, timeout...). */
 export class ApiError extends Error {
@@ -48,6 +48,7 @@ async function request<T>(settings: Settings, method: string, path: string, body
 export const api = {
   postOps: (s: Settings, ops: Op[]) => request<OpsResponse>(s, 'POST', '/api/v1/ops', { ops }),
   pull: (s: Settings, since: number) => request<PullResponse>(s, 'GET', `/api/v1/bookmarks?since=${since}`),
-  import: (s: Settings, bookmarks: ImportItem[]) => request<ImportResponse>(s, 'POST', '/api/v1/import', { bookmarks }),
+  import: (s: Settings, bookmarks: ImportItem[], tags: TagMeta[] = []) =>
+    request<ImportResponse>(s, 'POST', '/api/v1/import', { bookmarks, tags }),
   tags: (s: Settings) => request<{ tags: { name: string; count: number }[] }>(s, 'GET', '/api/v1/tags'),
 }

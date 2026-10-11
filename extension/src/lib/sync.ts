@@ -109,7 +109,8 @@ export function createSyncEngine(deps: SyncDeps) {
       })
       deps.cancelRetry()
 
-      const dup = res?.results.filter((r) => r.status === 'duplicate').length ?? 0
+      const bookmarkOps = new Set(batch.filter((o) => o.entity === 'bookmark').map((o) => o.op_id))
+      const dup = res?.results.filter((r) => r.status === 'duplicate' && bookmarkOps.has(r.op_id)).length ?? 0
       await setState({
         status: 'idle',
         attempt: 0,
@@ -167,7 +168,7 @@ export function createSyncEngine(deps: SyncDeps) {
 
   /** Drops the local cache (e.g. after switching servers) and pulls a full snapshot. */
   async function resetAndResync(): Promise<void> {
-    await withLock(() => deps.set('cache', { version: 0, bookmarks: {} }))
+    await withLock(() => deps.set('cache', { version: 0, bookmarks: {}, stashes: {}, tags: {} }))
     await setState({ status: 'idle', attempt: 0, lastError: undefined })
     await sync({ full: true })
   }

@@ -26,6 +26,6 @@ export default defineManifest({
     type: 'module',
   },
   permissions: ['contextMenus', 'storage', 'alarms', 'bookmarks', 'favicon', 'activeTab', 'unlimitedStorage'],
-  optional_permissions: ['history'],
+  optional_permissions: ['history', 'tabs'],
   optional_host_permissions: ['http://*/*', 'https://*/*'],
 })
