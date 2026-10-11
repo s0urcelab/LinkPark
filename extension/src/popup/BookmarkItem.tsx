@@ -73,7 +73,7 @@ export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, a
     const tooltip = [b.title, b.url, visits !== undefined ? `访问 ${visits} 次` : ''].filter(Boolean).join('\n')
     return (
       <li {...rowProps} className={`group flex items-center gap-2.5 rounded-md px-2 py-0.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ${rowClass}`}>
-        <Favicon url={b.url} size={16} />
+        <Favicon url={b.url} stored={b.favicon} size={16} />
         {/* CJK glyphs sit low in the line box; nudge up to center against the icon */}
         <button className="min-w-0 flex-1 -translate-y-px truncate py-0.5 text-left text-sm leading-5" onClick={open} onAuxClick={open} title={tooltip}>
           {b.title || b.url}
@@ -86,7 +86,7 @@ export function BookmarkItem({ bookmark: b, pending, compact, visits, editing, a
   return (
     <li {...rowProps} className={`group flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ${rowClass}`}>
       <div className="pt-0.5">
-        <Favicon url={b.url} />
+        <Favicon url={b.url} stored={b.favicon} />
       </div>
       <div className="min-w-0 flex-1">
         <button className="block w-full text-left" onClick={open} onAuxClick={open} title={b.url}>

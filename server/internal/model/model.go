@@ -138,6 +138,8 @@ type ImportItem struct {
 	Tags      []string `json:"tags"`
 	Rank      string   `json:"rank"`
 	CreatedAt int64    `json:"created_at"`
+	// Data-URL image captured at import. Empty when the client had nothing to store.
+	Favicon string `json:"favicon"`
 }
 
 type ImportResult struct {

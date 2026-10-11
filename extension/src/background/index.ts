@@ -1,5 +1,5 @@
 import { api } from '../lib/api'
-import { rankImport, type ImportPlan } from '../lib/importer'
+import { chunkImport, rankImport, type ImportPlan } from '../lib/importer'
 import type { AddResult, Message, Reply, StashResult } from '../lib/messages'
 import { buildState, findByUrl, makeCreateOp, makeDeleteOp, makeStashCreateOp, makeUpdateOp, rankForTags } from '../lib/ops'
 import { stashItemsFromTabs, TABS_PERMISSION } from '../lib/stash'
@@ -17,6 +17,8 @@ const PERIODIC_ALARM = 'linkpark-periodic'
 // chrome.alarms cannot fire sooner than 30s; shorter backoffs use a timer while the worker is alive.
 const MIN_ALARM_MS = 30_000
 const IMPORT_CHUNK = 1000
+// Favicons are data URLs; 1000 of them can exceed the 16MB request limit.
+const IMPORT_CHUNK_BYTES = 8 << 20
 
 let retryTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -148,8 +150,9 @@ async function runImport(plan: ImportPlan): Promise<{ imported: number; skipped:
   })
   let imported = 0
   let skipped = 0
-  for (let i = 0; i < items.length || i === 0; i += IMPORT_CHUNK) {
-    const res = await api.import(settings, items.slice(i, i + IMPORT_CHUNK), i === 0 ? tags : [])
+  const chunks = items.length ? chunkImport(items, IMPORT_CHUNK, IMPORT_CHUNK_BYTES) : [[]]
+  for (const [i, chunk] of chunks.entries()) {
+    const res = await api.import(settings, chunk, i === 0 ? tags : [])
     imported += res.imported
     skipped += res.skipped
   }

@@ -108,6 +108,8 @@ export interface ImportItem {
   tags: string[]
   rank: string
   created_at: number
+  /** `data:image/...;base64,...` captured at import, used when Chrome has no cached icon. */
+  favicon?: string
 }
 
 export interface ImportResponse {

@@ -9,7 +9,7 @@
 - tag 栏：未选择时只显示固定的 tag，其余收在「更多」；选中后只显示与当前结果有交集的关联 tag（计数为结果内数量）。没有任何 tag 的书签自动归入虚拟的「未分类」
 - 标签管理（设置页）：拖拽排序、固定 / 取消固定、重命名（改为已有名称即合并）、删除（仅从书签上移除 tag）
 - 暂存区：右键网页或工具栏图标「暂存当前窗口的所有标签页」，可整组打开、逐条收藏为书签或移除（首次使用需授权读取标签页）；每组默认以创建时间命名，可手动重命名，按组折叠/展开
-- 一次性导入浏览器书签或导出的 HTML 书签文件：路径上每一级文件夹都成为一个 tag，默认顺序按原文件夹深度优先排列；书签栏上的文件夹自动固定，根目录下的散链接归入「未分类」。导入时可勾选任意文件夹直接放入暂存区（以文件夹名为组名，含子文件夹，超过 1000 条自动分组），这些链接不会导入为书签
+- 一次性导入浏览器书签或导出的 HTML 书签文件：路径上每一级文件夹都成为一个 tag，默认顺序按原文件夹深度优先排列；书签栏上的文件夹自动固定，根目录下的散链接归入「未分类」。浏览器缓存或文件中的网站图标会一并保存（站点失效后仍能显示；本机之后访问过新图标则仍显示新的）。导入时可勾选任意文件夹直接放入暂存区（以文件夹名为组名，含子文件夹，超过 1000 条自动分组），这些链接不会导入为书签
 - 本地乐观更新 + outbox 队列，按批事务提交，失败自动指数退避重试
 - 本地缓存 + 基于版本号的增量拉取，多设备以服务端为准
 
@@ -52,7 +52,7 @@ go test ./...
   - `tag` 以 tag 名作为 `id`（空字符串表示虚拟的「未分类」）：update `{name?, rank?, pinned?}`，`name` 为重命名，目标已存在则合并且保留目标的顺序与固定状态；delete 从所有书签上移除该 tag。受影响的书签会获得新版本号
   - `stash` 的 payload：create `{name, items:[{url, title}], created_at}`，update `{name?, items?}`
 - `GET /api/v1/bookmarks?since=<version>`：增量拉取 `{version, full, bookmarks, stashes, tags}`（含删除墓碑），`since=0` 为全量；`tags` 总是完整的 tag 元数据 `[{name, rank, pinned}]`
-- `POST /api/v1/import` `{bookmarks:[{url, title, tags, rank, created_at}], tags:[{name, rank, pinned}]}`：批量导入，按 URL 去重；tag 元数据只在该 tag 尚无元数据时写入，不会覆盖用户的排序
+- `POST /api/v1/import` `{bookmarks:[{url, title, tags, rank, created_at, favicon?}], tags:[{name, rank, pinned}]}`：批量导入，按 URL 去重；`favicon` 只接受图片 data URL，过长或非图片则丢弃；tag 元数据只在该 tag 尚无元数据时写入，不会覆盖用户的排序
 - `GET /api/v1/tags`：tag 及计数
 - `GET /healthz`
 

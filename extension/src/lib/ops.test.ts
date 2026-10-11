@@ -369,7 +369,7 @@ describe('parseBookmarksHtml', () => {
   it('rebuilds the tree, decoding entities and converting dates to ms', () => {
     const plan = flattenTree(parseBookmarksHtml(html))
     expect(plan.items).toEqual([
-      { url: 'https://a.com/?x=1&y=2', title: 'A <1>', tags: ['PT & BT'], created_at: 1689615354000 },
+      { url: 'https://a.com/?x=1&y=2', title: 'A <1>', tags: ['PT & BT'], created_at: 1689615354000, favicon: 'data:image/png;base64,AAA' },
       { url: 'https://deep.com', title: 'Deep', tags: ['PT & BT', '深层'], created_at: 1000 },
       { url: 'https://top.com', title: "Top 'quoted'", tags: [], created_at: 1700000000000 },
       { url: 'https://loose.com', title: 'Loose', tags: [], created_at: 1600000000000 },

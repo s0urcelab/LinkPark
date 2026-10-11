@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -25,6 +26,8 @@ const (
 	maxTitleLen = 1024
 	maxTagLen   = 64
 	maxTags     = 32
+	// A 32px PNG data URL does not fit in maxURLLen. Drop it rather than truncate it into a broken URL.
+	maxFaviconLen = 65536
 
 	// tagSep must never appear in a tag name; normalizeTags strips control characters.
 	tagSep = "\x1f"
@@ -481,8 +484,8 @@ func (s *Store) ListTags(ctx context.Context) ([]model.TagCount, error) {
 }
 
 // Import inserts bookmarks in one transaction, skipping URLs that already exist.
-// Duplicate URLs inside the batch are merged (tags unioned). Tag metadata is only added
-// for tags that have none yet, so re-importing never undoes the user's ordering.
+// Duplicate URLs inside the batch are merged (tags unioned, first usable favicon kept).
+// Tag metadata is only added for tags that have none yet, so re-importing never undoes the user's ordering.
 func (s *Store) Import(ctx context.Context, items []model.ImportItem, tags []model.TagMeta) (model.ImportResult, error) {
 	type entry struct {
 		item model.ImportItem
@@ -498,12 +501,17 @@ func (s *Store) Import(ctx context.Context, items []model.ImportItem, tags []mod
 			continue
 		}
 		tags := lenientTags(it.Tags)
+		icon := cleanFavicon(it.Favicon)
 		if e, ok := merged[url]; ok {
 			skipped++
 			e.tags = lenientTags(append(e.tags, tags...))
+			if e.item.Favicon == "" {
+				e.item.Favicon = icon
+			}
 			continue
 		}
 		it.URL = url
+		it.Favicon = icon
 		merged[url] = &entry{item: it, tags: tags}
 		order = append(order, url)
 	}
@@ -541,8 +549,8 @@ func (s *Store) Import(ctx context.Context, items []model.ImportItem, tags []mod
 			rank = ""
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO bookmarks (id, url, title, rank, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			id, url, title, rank, createdAt, now, version); err != nil {
+			INSERT INTO bookmarks (id, url, title, favicon, rank, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, url, title, e.item.Favicon, rank, createdAt, now, version); err != nil {
 			return model.ImportResult{}, err
 		}
 		if err := setTags(ctx, tx, id, e.tags); err != nil {
@@ -634,6 +642,21 @@ func lenientTags(in []string) []string {
 		}
 	}
 	return out
+}
+
+var faviconRE = regexp.MustCompile(`(?i)^data:image/(png|jpe?g|gif|webp|x-icon|vnd\.microsoft\.icon);base64,[a-z0-9+/]+={0,2}$`)
+
+func cleanFavicon(raw string) string {
+	s := strings.Map(func(r rune) rune {
+		if r == ' ' || r == '\n' || r == '\r' || r == '\t' {
+			return -1
+		}
+		return r
+	}, raw)
+	if len(s) > maxFaviconLen || !faviconRE.MatchString(s) {
+		return ""
+	}
+	return s
 }
 
 func truncate(s string, n int) string {

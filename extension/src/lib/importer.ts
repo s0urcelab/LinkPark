@@ -1,3 +1,4 @@
+import { usableFavicon } from './favicon'
 import { rankBetween, rankSequence } from './rank'
 import { normalizeTag, normalizeTags, tagKey, UNTAGGED } from './tags'
 import type { ImportItem, StashItem, TagMeta } from './types'
@@ -9,6 +10,8 @@ export interface TreeNode {
   url?: string
   dateAdded?: number
   folderType?: string
+  /** Data-URL icon from an HTML export. Chrome's tree has none; those are filled in later. */
+  favicon?: string
   children?: TreeNode[]
 }
 
@@ -77,7 +80,16 @@ export function flattenTree(roots: TreeNode[], stashKeys: ReadonlySet<string> = 
   const walk = (node: TreeNode, key: string, depth: number, path: string[], onBar: boolean, fallback: number) => {
     const date = known(node.dateAdded) ?? fallback
     if (node.url) {
-      if (isWebUrl(node.url)) items.push({ url: node.url, title: node.title || node.url, tags: normalizeTags(path), created_at: date })
+      if (isWebUrl(node.url)) {
+        const icon = usableFavicon(node.favicon)
+        items.push({
+          url: node.url,
+          title: node.title || node.url,
+          tags: normalizeTags(path),
+          created_at: date,
+          ...(icon && { favicon: icon }),
+        })
+      }
       return
     }
     if (stashKeys.has(key)) {
@@ -167,6 +179,25 @@ export function rankImport(
   return { items: plan.items.map((it, i) => ({ ...it, rank: bookmarkRanks[i] })), tags }
 }
 
+/** Splits an import so one request stays under the server body limit once favicons are attached. */
+export function chunkImport<T>(items: T[], maxItems = 1000, maxBytes = 8 << 20): T[][] {
+  const chunks: T[][] = []
+  let cur: T[] = []
+  let size = 2
+  for (const it of items) {
+    const n = JSON.stringify(it).length + 1
+    if (cur.length > 0 && (cur.length >= maxItems || size + n > maxBytes)) {
+      chunks.push(cur)
+      cur = []
+      size = 2
+    }
+    cur.push(it)
+    size += n
+  }
+  if (cur.length) chunks.push(cur)
+  return chunks
+}
+
 // ---------- Netscape bookmark file (the HTML every browser exports) ----------
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' }
@@ -224,7 +255,13 @@ export function parseBookmarksHtml(html: string): TreeNode[] {
       }
       pending = folder
     } else if (m[4] !== undefined) {
-      siblings.push({ title: text(m[4]), url: decodeEntities(attr(m[3], 'HREF') ?? ''), dateAdded: parseDate(attr(m[3], 'ADD_DATE')) })
+      const icon = usableFavicon(decodeEntities(attr(m[3], 'ICON') ?? attr(m[3], 'ICON_URI') ?? ''))
+      siblings.push({
+        title: text(m[4]),
+        url: decodeEntities(attr(m[3], 'HREF') ?? ''),
+        dateAdded: parseDate(attr(m[3], 'ADD_DATE')),
+        ...(icon && { favicon: icon }),
+      })
       pending = null
     } else if (m[0][1] === '/') {
       stack.pop()

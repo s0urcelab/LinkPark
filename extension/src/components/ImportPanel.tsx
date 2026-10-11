@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { fillFavicons } from '../lib/favicon'
 import { flattenTree, folderTree, parseBookmarksHtml, summarize, type FolderNode, type TreeNode } from '../lib/importer'
 import { send } from '../lib/messages'
 import { ChevronRightIcon } from './icons'
@@ -6,7 +7,7 @@ import { ChevronRightIcon } from './icons'
 type Phase =
   | { kind: 'loading' }
   | { kind: 'ready' }
-  | { kind: 'importing' }
+  | { kind: 'importing'; icons?: { done: number; total: number } }
   | { kind: 'done'; imported: number; skipped: number; stashes: number }
   | { kind: 'error'; msg: string }
 
@@ -58,7 +59,11 @@ export function ImportPanel({ onFinished, onSkip }: { onFinished?(): void; onSki
   const run = async () => {
     setPhase({ kind: 'importing' })
     try {
-      const res = await send({ type: 'import', ...plan })
+      const items = await fillFavicons(plan.items, (done, total) => {
+        if (total > 0) setPhase({ kind: 'importing', icons: { done, total } })
+      })
+      setPhase({ kind: 'importing' })
+      const res = await send({ type: 'import', ...plan, items })
       setPhase({ kind: 'done', ...res, stashes: plan.stashes.length })
       onFinished?.()
     } catch (e) {
@@ -96,7 +101,7 @@ export function ImportPanel({ onFinished, onSkip }: { onFinished?(): void; onSki
             另有 <b>{stashed}</b> 个链接按文件夹分成 <b>{plan.stashes.length}</b> 组放入暂存区，不作为书签导入。
           </>
         )}
-        已存在于服务端的链接会自动跳过。
+        能读到的网站图标会一并保存，以后站点失效也能显示。已存在于服务端的链接会自动跳过。
       </p>
 
       {folders.length > 0 && (
@@ -115,7 +120,13 @@ export function ImportPanel({ onFinished, onSkip }: { onFinished?(): void; onSki
 
       <div className="flex flex-wrap items-center gap-2">
         <button className="btn-primary" onClick={() => void run()} disabled={busy || total + stashed === 0}>
-          {busy ? '导入中…' : total > 0 ? `导入 ${total} 个书签` : '放入暂存区'}
+          {phase.kind === 'importing'
+            ? phase.icons
+              ? `正在读取图标 ${phase.icons.done}/${phase.icons.total}`
+              : '导入中…'
+            : total > 0
+              ? `导入 ${total} 个书签`
+              : '放入暂存区'}
         </button>
         <label className={`btn-ghost border border-zinc-200 dark:border-zinc-700 ${busy ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}>
           从 HTML 文件导入…

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/linkpark/server/internal/model"
@@ -191,5 +192,31 @@ func TestImport(t *testing.T) {
 		if b.URL == "https://b.com" && len(b.Tags) != 2 {
 			t.Fatalf("in-batch duplicates should merge tags: %+v", b)
 		}
+	}
+}
+
+func TestImportFavicon(t *testing.T) {
+	s := newTestStore(t)
+	png := "data:image/png;base64,AAAA"
+	_, err := s.Import(context.Background(), []model.ImportItem{
+		{URL: "https://icon.com", Title: "i", Favicon: png},
+		{URL: "https://icon.com", Title: "dup", Favicon: "data:image/png;base64,BBBB"},
+		{URL: "https://later.com", Title: "1", Favicon: "https://later.com/favicon.ico"},
+		{URL: "https://later.com", Title: "2", Favicon: "data:image/png;base64,CCCC"},
+		{URL: "https://nope.com", Title: "n", Favicon: "data:image/svg+xml;base64,AAAA"},
+		{URL: "https://big.com", Title: "b", Favicon: "data:image/png;base64," + strings.Repeat("A", maxFaviconLen)},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, b := range changes(t, s, 0).Bookmarks {
+		got[b.URL] = b.Favicon
+	}
+	if got["https://icon.com"] != png || got["https://later.com"] != "data:image/png;base64,CCCC" {
+		t.Fatalf("favicon merge: %v", got)
+	}
+	if got["https://nope.com"] != "" || got["https://big.com"] != "" {
+		t.Fatalf("rejected favicons should be dropped: %v", got)
 	}
 }
