@@ -98,4 +98,34 @@ describe('flattenTree', () => {
       expect.objectContaining({ url: 'https://other.com', title: 'https://other.com', tags: [] }),
     ])
   })
+
+  it('never stamps bookmarks without dateAdded with the current time', () => {
+    const tree: TreeNode[] = [{
+      title: '',
+      children: [{
+        title: '书签栏',
+        children: [
+          { title: 'orphan', url: 'https://orphan.com' },
+          {
+            title: '吉他',
+            dateAdded: 100,
+            children: [
+              { title: 'first', url: 'https://first.com' },
+              { title: 'a', url: 'https://a.com', dateAdded: 300 },
+              { title: 'b', url: 'https://b.com', dateAdded: 0 },
+              { title: 'c', url: 'https://c.com', dateAdded: 500 },
+            ],
+          },
+        ],
+      }],
+    }]
+    const dates = Object.fromEntries(flattenTree(tree).map((i) => [i.url, i.created_at]))
+    expect(dates).toEqual({
+      'https://orphan.com': 1,
+      'https://first.com': 100,
+      'https://a.com': 300,
+      'https://b.com': 300,
+      'https://c.com': 500,
+    })
+  })
 })

@@ -4,7 +4,6 @@ package store
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/linkpark/server/internal/model"
 	"github.com/linkpark/server/migrations"
 
@@ -492,7 +492,7 @@ func (s *Store) Import(ctx context.Context, items []model.ImportItem) (model.Imp
 		if err != nil {
 			return model.ImportResult{}, err
 		}
-		id := NewID()
+		id := uuid.NewString()
 		createdAt := e.item.CreatedAt
 		if createdAt <= 0 || createdAt > now {
 			createdAt = now
@@ -584,15 +584,4 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return string(r[:n])
-}
-
-// NewID returns a random RFC 4122 version 4 UUID.
-func NewID() string {
-	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic(err)
-	}
-	b[6] = (b[6] & 0x0f) | 0x40
-	b[8] = (b[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:8], b[8:10], b[10:12], b[12:16])
 }

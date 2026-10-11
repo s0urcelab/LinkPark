@@ -1,7 +1,6 @@
 services:
   linkpark:
     image: ${LINKPARK_IMAGE_OWNER:-linkpark}/linkpark:latest
-    build: ./server
     container_name: linkpark
     restart: unless-stopped
     ports:
