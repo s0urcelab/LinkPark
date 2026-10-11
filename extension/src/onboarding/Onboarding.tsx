@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ImportPanel } from '../components/ImportPanel'
 import { SettingsForm } from '../components/SettingsForm'
+import { useStorage } from '../components/useStorage'
 import { getItem, isConfigured, patchItem } from '../lib/storage'
 
 type Step = 'loading' | 'connect' | 'import' | 'done'
@@ -13,6 +14,7 @@ const STEPS: { key: Step; label: string }[] = [
 
 export function Onboarding() {
   const [step, setStep] = useState<Step>('loading')
+  const icon = useStorage('icon')
 
   useEffect(() => {
     void Promise.all([getItem('settings'), getItem('onboarding')]).then(([s, o]) => {
@@ -32,7 +34,7 @@ export function Onboarding() {
   return (
     <main className="mx-auto max-w-xl px-6 py-16">
       <div className="mb-10 flex items-center gap-3">
-        <img src="/icons/icon-48.png" width={40} height={40} alt="" />
+        <img src={icon?.dataUrl || '/icons/icon-128.png'} width={40} height={40} alt="" />
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">欢迎使用 LinkPark</h1>
           <p className="text-sm text-zinc-500">简洁现代的云端书签管理器</p>
@@ -62,7 +64,7 @@ export function Onboarding() {
           <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
             <p className="text-base font-medium text-zinc-900 dark:text-zinc-100">一切就绪</p>
             <ul className="list-inside list-disc space-y-1">
-              <li>在任意网页或链接上右键，选择「添加到 LinkPark」</li>
+              <li>在任意网页上右键，选择「添加到 LinkPark」</li>
               <li>点击工具栏的 LinkPark 图标查看、搜索和按标签筛选书签</li>
               <li>图标上的角标显示同步状态，右键图标可打开设置</li>
               <li>建议将 LinkPark 固定到工具栏，方便随时打开</li>

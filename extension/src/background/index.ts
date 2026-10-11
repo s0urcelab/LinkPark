@@ -9,7 +9,6 @@ import { describeSync, type SyncTone } from '../lib/syncStatus'
 import type { UpdatePayload } from '../lib/types'
 
 const MENU_PAGE = 'linkpark-add-page'
-const MENU_LINK = 'linkpark-add-link'
 const MENU_STASH = 'linkpark-stash-window'
 const MENU_SYNC = 'linkpark-sync-now'
 const RETRY_ALARM = 'linkpark-retry'
@@ -214,8 +213,7 @@ chrome.runtime.onMessage.addListener((msg: Message, _sender, sendResponse) => {
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: MENU_PAGE, title: '添加到 LinkPark', contexts: ['page'] })
-    chrome.contextMenus.create({ id: MENU_LINK, title: '添加链接到 LinkPark', contexts: ['link'] })
-    chrome.contextMenus.create({ id: MENU_STASH, title: '暂存当前窗口的所有标签页', contexts: ['page', 'action'] })
+    chrome.contextMenus.create({ id: MENU_STASH, title: '暂存当前窗口的所有标签页', contexts: ['action'] })
     chrome.contextMenus.create({ id: MENU_SYNC, title: '立即同步', contexts: ['action'] })
   })
   if (reason === chrome.runtime.OnInstalledReason.INSTALL) {
@@ -238,11 +236,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
     return
   }
-  const isLink = info.menuItemId === MENU_LINK
-  const url = (isLink ? info.linkUrl : info.pageUrl || tab?.url) ?? ''
-  const title = isLink ? info.selectionText || url : tab?.title || url
+  const url = info.pageUrl || tab?.url || ''
+  const title = tab?.title || url
   try {
-    const res = await addBookmark({ url, title, favicon: isLink ? '' : tab?.favIconUrl })
+    const res = await addBookmark({ url, title, favicon: tab?.favIconUrl })
     if (res.status === 'added') await flash('+', '#16a34a')
     else if (res.status === 'exists') await flash('=', '#6b7280')
   } catch {
@@ -256,8 +253,40 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 chrome.runtime.onStartup.addListener(() => void engine.sync())
 
+const DEFAULT_ICON = {
+  16: 'icons/icon-16.png',
+  32: 'icons/icon-32.png',
+  48: 'icons/icon-48.png',
+  128: 'icons/icon-128.png',
+}
+
+/** Toolbar icon does not survive a browser restart, so it is applied whenever the worker starts. */
+async function applyToolbarIcon(dataUrl: string): Promise<void> {
+  try {
+    if (!dataUrl) {
+      await chrome.action.setIcon({ path: DEFAULT_ICON })
+      return
+    }
+    const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob())
+    const imageData: Record<number, ImageData> = {}
+    for (const size of [16, 32, 48, 128]) {
+      const canvas = new OffscreenCanvas(size, size)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('no canvas')
+      ctx.drawImage(bitmap, 0, 0, size, size)
+      imageData[size] = ctx.getImageData(0, 0, size, size)
+    }
+    bitmap.close()
+    await chrome.action.setIcon({ imageData })
+  } catch {
+    await chrome.action.setIcon({ path: DEFAULT_ICON }).catch(() => undefined)
+  }
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && 'settings' in changes) void updateBadge()
+  if (area !== 'local') return
+  if ('settings' in changes) void updateBadge()
+  if ('icon' in changes) void getItem('icon').then((icon) => applyToolbarIcon(icon.dataUrl))
 })
 
 self.addEventListener('online', () => void engine.sync())
@@ -268,5 +297,6 @@ void (async () => {
   }
   // Resume anything left over if the worker was restarted mid-retry.
   if ((await getItem('outbox')).length > 0) void engine.sync()
+  await applyToolbarIcon((await getItem('icon')).dataUrl)
   await updateBadge()
 })()

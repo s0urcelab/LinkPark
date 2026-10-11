@@ -14,7 +14,6 @@ import { StashView } from './StashView'
 import { TagBar } from './TagBar'
 import { Toolbar } from './Toolbar'
 
-const PAGE_SIZE = 100
 const SAVE_DELAY_MS = 150
 
 export function App() {
@@ -27,7 +26,6 @@ export function App() {
   const [tab, setTab] = useState<PopupTab>('all')
   const [queries, setQueries] = useState<Record<PopupTab, string>>({ all: '', stash: '' })
   const [selected, setSelected] = useState<string[]>([])
-  const [limit, setLimit] = useState(PAGE_SIZE)
   const [stashOpen, setStashOpen] = useState<string[]>([])
   const [editing, setEditing] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -43,7 +41,6 @@ export function App() {
       setTab(s.tab === 'stash' ? 'stash' : 'all')
       setQueries({ all: s.queries?.all ?? '', stash: s.queries?.stash ?? '' })
       setSelected(s.tags)
-      setLimit(Math.max(PAGE_SIZE, s.limit))
       setStashOpen(s.stashOpen)
       scrollTop.current = s.scrollTop
       pendingScroll.current = s.scrollTop
@@ -76,8 +73,8 @@ export function App() {
   // ---- persistence of the popup view ----
 
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const latest = useRef<Omit<PopupState, 'scrollTop'>>({ tab: 'all', queries: { all: '', stash: '' }, tags: [], limit: PAGE_SIZE, stashOpen: [] })
-  latest.current = { tab, queries, tags: selected, limit, stashOpen }
+  const latest = useRef<Omit<PopupState, 'scrollTop'>>({ tab: 'all', queries: { all: '', stash: '' }, tags: [], stashOpen: [] })
+  latest.current = { tab, queries, tags: selected, stashOpen }
   // Scrolling doesn't re-render, so read the live scroll ref at save time.
   const persist = () => void setItem('popupState', { ...latest.current, scrollTop: scrollTop.current })
 
@@ -87,7 +84,7 @@ export function App() {
     saveTimer.current = setTimeout(persist, SAVE_DELAY_MS)
   }
 
-  useEffect(scheduleSave, [tab, queries, selected, limit, stashOpen, restored])
+  useEffect(scheduleSave, [tab, queries, selected, stashOpen, restored])
 
   useEffect(() => {
     // The popup can close at any moment; flush on hide as a best effort.
@@ -109,7 +106,6 @@ export function App() {
 
   /** User-initiated changes to the result set start from the top again. */
   const resetPosition = () => {
-    setLimit(PAGE_SIZE)
     pendingScroll.current = null
     scrollTop.current = 0
     if (listRef.current) listRef.current.scrollTop = 0
@@ -161,11 +157,10 @@ export function App() {
   const showTag = (t: string) => updateSelected((s) => (s.some((x) => tagKey(x) === tagKey(t)) ? s : [...s, t]))
 
   const pending = useMemo(() => new Set(outbox?.filter((o) => o.entity === 'bookmark').map((o) => o.id)), [outbox])
-  const shown = sorted.slice(0, limit)
   const byId = useMemo(() => new Map(view.map((b) => [b.id, b])), [view])
   // Manual order is the global order, so it can only be edited while viewing it.
   const reorder = useDragReorder(
-    shown.map((b) => b.id),
+    sorted.map((b) => b.id),
     (id, prev, next) => {
       const rank = rankBetween(prev && byId.get(prev)?.rank, next && byId.get(next)?.rank)
       void send({ type: 'ops', ops: [makeUpdateOp(id, { rank })] })
@@ -283,13 +278,11 @@ export function App() {
             ref={listRef}
             className="scroll-area mx-3 mt-1.5 flex-1 pb-2"
             onScroll={(e) => {
-              const el = e.currentTarget
-              scrollTop.current = el.scrollTop
+              scrollTop.current = e.currentTarget.scrollTop
               scheduleSave()
-              if (el.scrollTop + el.clientHeight > el.scrollHeight - 200 && limit < sorted.length) setLimit((l) => l + PAGE_SIZE)
             }}
           >
-            {shown.map((b, i) => (
+            {sorted.map((b, i) => (
               <BookmarkItem
                 key={b.id}
                 bookmark={b}

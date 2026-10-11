@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-labelledby="title desc">
+  <title id="title">LinkPark logo</title>
+  <desc id="desc">A forest-green bookmark with a white negative-space leaf, above the LinkPark wordmark and tagline.</desc>
+  <rect width="800" height="800" fill="#FFFFFF"/>
+
+  <!-- Bookmark symbol -->
+  <g transform="translate(0 8)">
+    <path d="M310 82
+             C286 82 270 100 270 124
+             V350
+             C270 366 281 375 295 367
+             L400 307
+             L505 367
+             C519 375 530 366 530 350
+             V124
+             C530 100 514 82 490 82 Z"
+          fill="#173F35"/>
+    <!-- Leaf-shaped negative space -->
+    <path d="M337 278
+             C326 227 345 177 399 150
+             C424 138 451 130 470 126
+             C472 162 467 204 449 236
+             C430 270 399 289 365 301
+             C367 272 383 238 413 205
+             C380 223 354 249 337 278 Z"
+          fill="#FFFFFF"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="400" y="535"
+        text-anchor="middle"
+        font-family="Inter, Geist, Helvetica, Arial, sans-serif"
+        font-size="100"
+        font-weight="700"
+        letter-spacing="-4"
+        fill="#173F35">LinkPark</text>
+
+  <!-- Tagline -->
+  <text x="400" y="600"
+        text-anchor="middle"
+        font-family="Inter, Geist, Helvetica, Arial, sans-serif"
+        font-size="29"
+        font-weight="400"
+        letter-spacing="3.2"
+        fill="#49665D">Your links. Your park.</text>
+</svg>

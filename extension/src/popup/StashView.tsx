@@ -74,7 +74,7 @@ export function StashView({ stashes, query, saved, open, onToggle, notify }: Pro
           />
         ))}
         {stashes.length === 0 && (
-          <li className="py-16 text-center text-sm text-charcoal/40 dark:text-zinc-500">暂存区是空的。右键网页或工具栏图标，选择「暂存当前窗口的所有标签页」</li>
+          <li className="py-16 text-center text-sm text-charcoal/40 dark:text-zinc-500">暂存区是空的。右键工具栏图标，选择「暂存当前窗口的所有标签页」</li>
         )}
         {stashes.length > 0 && matches.length === 0 && (
           <li className="py-16 text-center text-sm text-charcoal/40 dark:text-zinc-500">没有匹配的暂存标签页</li>

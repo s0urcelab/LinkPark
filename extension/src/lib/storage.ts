@@ -16,9 +16,13 @@ export interface PopupState {
   queries: Record<PopupTab, string>
   tags: string[]
   scrollTop: number
-  limit: number
   /** Expanded stash groups; the rest show only their header. */
   stashOpen: string[]
+}
+
+/** Custom toolbar icon. An empty data URL uses the built-in mark. */
+export interface ToolbarIcon {
+  dataUrl: string
 }
 
 export interface StorageSchema {
@@ -30,19 +34,21 @@ export interface StorageSchema {
   failed: FailedBatch[]
   syncState: SyncState
   onboarding: Onboarding
+  icon: ToolbarIcon
 }
 
 export type StorageKey = keyof StorageSchema
 
 export const defaults: StorageSchema = {
   prefs: { sort: 'default', compact: false },
-  popupState: { tab: 'all', queries: { all: '', stash: '' }, tags: [], scrollTop: 0, limit: 0, stashOpen: [] },
+  popupState: { tab: 'all', queries: { all: '', stash: '' }, tags: [], scrollTop: 0, stashOpen: [] },
   settings: { serverUrl: '', token: '' },
   cache: { version: 0, bookmarks: {}, stashes: {}, tags: {} },
   outbox: [],
   failed: [],
   syncState: { status: 'idle', attempt: 0 },
   onboarding: { completed: false, importDone: false },
+  icon: { dataUrl: '' },
 }
 
 export async function getItem<K extends StorageKey>(key: K): Promise<StorageSchema[K]> {

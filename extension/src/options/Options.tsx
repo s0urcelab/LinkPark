@@ -4,8 +4,9 @@ import { RefreshIcon } from '../components/icons'
 import { SettingsForm } from '../components/SettingsForm'
 import { SyncIndicator } from '../components/SyncIndicator'
 import { useStorage } from '../components/useStorage'
+import { rasterizeIcon } from '../lib/icon'
 import { send } from '../lib/messages'
-import { isConfigured } from '../lib/storage'
+import { isConfigured, setItem } from '../lib/storage'
 import { TagManager } from './TagManager'
 
 type View = 'settings' | 'tags'
@@ -64,6 +65,7 @@ export function Options() {
           <Section title="服务端">
             <SettingsForm />
           </Section>
+          <IconSection />
           <SyncSection />
           <ImportSection />
         </>
@@ -73,6 +75,58 @@ export function Options() {
         </Section>
       )}
     </main>
+  )
+}
+
+const DEFAULT_ICON = '/icons/icon-128.png'
+
+function IconSection() {
+  const icon = useStorage('icon')
+  const [error, setError] = useState<string | null>(null)
+  const custom = icon?.dataUrl ?? ''
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      await setItem('icon', { dataUrl: await rasterizeIcon(file) })
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '无法读取这张图片')
+    }
+  }
+
+  return (
+    <Section title="图标">
+      <div className="flex items-center gap-4">
+        <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-sage/70 p-1 dark:bg-zinc-800">
+          <img src={custom || DEFAULT_ICON} alt="" className="size-full object-contain" />
+        </span>
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-500">替换浏览器工具栏上的 LinkPark 图标。正方形图片效果最好。</p>
+          <div className="flex flex-wrap gap-2">
+            <label className="btn-ghost cursor-pointer border border-zinc-200 dark:border-zinc-700">
+              上传图片
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  void onFile(file)
+                }}
+              />
+            </label>
+            {custom && (
+              <button type="button" className="btn-ghost" onClick={() => void setItem('icon', { dataUrl: '' }).then(() => setError(null))}>
+                恢复默认
+              </button>
+            )}
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+      </div>
+    </Section>
   )
 }
 

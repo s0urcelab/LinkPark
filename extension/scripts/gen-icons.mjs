@@ -1,4 +1,4 @@
-// Generates the toolbar icons as PNGs without external dependencies.
+// Rasterizes the bookmark mark from ../../linkpark-logo.svg (wordmark cropped out).
 // Usage: node scripts/gen-icons.mjs
 import { deflateSync } from 'node:zlib'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -37,46 +37,92 @@ const png = (size, rgba) => {
   ])
 }
 
-// Shape in unit coordinates: rounded square background + bookmark ribbon.
-const inRoundRect = (x, y, r) => {
-  const cx = Math.min(Math.max(x, r), 1 - r)
-  const cy = Math.min(Math.max(y, r), 1 - r)
-  return (x - cx) ** 2 + (y - cy) ** 2 <= r * r
-}
-const inRibbon = (x, y) => {
-  const l = 0.32, rgt = 0.68, top = 0.22, bot = 0.8, notch = 0.6
-  if (x < l || x > rgt || y < top || y > bot) return false
-  const mid = (l + rgt) / 2
-  const notchY = notch + (Math.abs(x - mid) / (mid - l)) * (bot - notch)
-  return y <= notchY
+// Paths from the logo, with the group's translate(0 8) baked into y.
+// Bookmark bbox is x 270–530, y 90–383. The square hugs that box so the mark fills the icon.
+const VIEW = { x: 239, y: 75.5, size: 322 }
+// Lighter than the wordmark's #173F35 so the toolbar icon stays readable.
+const GREEN = [0x3c, 0xb8, 0x88]
+
+const cubic = (p0, p1, p2, p3, steps = 32) => {
+  const pts = []
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps
+    const u = 1 - t
+    pts.push([
+      u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+      u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1],
+    ])
+  }
+  return pts
 }
 
-const bg = [79, 70, 229]
+const outline = (cmds) => {
+  const pts = []
+  let cur = [0, 0]
+  for (const c of cmds) {
+    if (c[0] === 'M' || c[0] === 'L') {
+      cur = [c[1], c[2]]
+      pts.push(cur)
+    } else if (c[0] === 'C') {
+      const end = [c[5], c[6]]
+      pts.push(...cubic(cur, [c[1], c[2]], [c[3], c[4]], end))
+      cur = end
+    }
+  }
+  return pts
+}
+
+const bookmark = outline([
+  ['M', 310, 90],
+  ['C', 286, 90, 270, 108, 270, 132],
+  ['L', 270, 358],
+  ['C', 270, 374, 281, 383, 295, 375],
+  ['L', 400, 315],
+  ['L', 505, 375],
+  ['C', 519, 383, 530, 374, 530, 358],
+  ['L', 530, 132],
+  ['C', 530, 108, 514, 90, 490, 90],
+])
+
+const leaf = outline([
+  ['M', 337, 286],
+  ['C', 326, 235, 345, 185, 399, 158],
+  ['C', 424, 146, 451, 138, 470, 134],
+  ['C', 472, 170, 467, 212, 449, 244],
+  ['C', 430, 278, 399, 297, 365, 309],
+  ['C', 367, 280, 383, 246, 413, 213],
+  ['C', 380, 231, 354, 257, 337, 286],
+])
+
+const inside = (pts, x, y) => {
+  let n = 0
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i]
+    const [xj, yj] = pts[j]
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) n++
+  }
+  return n % 2 === 1
+}
+
 const ss = 4
 mkdirSync('public/icons', { recursive: true })
 for (const size of [16, 32, 48, 128]) {
   const buf = Buffer.alloc(size * size * 4)
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
-      let cov = 0, white = 0
+      let hit = 0
       for (let sy = 0; sy < ss; sy++) {
         for (let sx = 0; sx < ss; sx++) {
-          const x = (px + (sx + 0.5) / ss) / size
-          const y = (py + (sy + 0.5) / ss) / size
-          if (inRoundRect(x, y, 0.22)) {
-            cov++
-            if (inRibbon(x, y)) white++
-          }
+          const x = VIEW.x + ((px + (sx + 0.5) / ss) / size) * VIEW.size
+          const y = VIEW.y + ((py + (sy + 0.5) / ss) / size) * VIEW.size
+          if (inside(bookmark, x, y) && !inside(leaf, x, y)) hit++
         }
       }
-      const n = ss * ss
-      const a = cov / n
-      const w = cov ? white / cov : 0
       const i = (py * size + px) * 4
-      buf[i] = Math.round(bg[0] + (255 - bg[0]) * w)
-      buf[i + 1] = Math.round(bg[1] + (255 - bg[1]) * w)
-      buf[i + 2] = Math.round(bg[2] + (255 - bg[2]) * w)
-      buf[i + 3] = Math.round(a * 255)
+      buf[i] = GREEN[0]
+      buf[i + 1] = GREEN[1]
+      buf[i + 2] = GREEN[2]
+      buf[i + 3] = Math.round((hit / (ss * ss)) * 255)
     }
   }
   writeFileSync(`public/icons/icon-${size}.png`, png(size, buf))
