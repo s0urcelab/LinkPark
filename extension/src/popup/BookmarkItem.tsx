@@ -77,9 +77,10 @@ export function BookmarkItem({ bookmark: b, pending, compact, visits, query, edi
     return (
       <li {...rowProps} className={`group hover-row flex items-center gap-2.5 rounded-md px-2 py-0.5 ${rowClass}`}>
         <Favicon url={b.url} stored={b.favicon} size={16} />
-        {/* CJK glyphs sit low in the line box; nudge up to center against the icon */}
-        <button className="min-w-0 flex-1 -translate-y-px truncate py-0.5 text-left text-sm leading-5" onClick={open} onAuxClick={open} title={tooltip}>
-          <Highlight text={b.title || b.url} query={query} />
+        <button className="flex min-w-0 flex-1 items-center self-stretch text-left" onClick={open} onAuxClick={open} title={tooltip}>
+          <span className="min-w-0 truncate text-sm leading-none">
+            <Highlight text={b.title || b.url} query={query} />
+          </span>
         </button>
         {actions}
       </li>
@@ -88,15 +89,13 @@ export function BookmarkItem({ bookmark: b, pending, compact, visits, query, edi
 
   return (
     <li {...rowProps} className={`group hover-row flex items-start gap-3 rounded-lg px-2 py-2 ${rowClass}`}>
-      <div className="pt-0.5">
-        <Favicon url={b.url} stored={b.favicon} />
-      </div>
+      <Favicon url={b.url} stored={b.favicon} />
       <div className="min-w-0 flex-1">
         <button className="block w-full text-left" onClick={open} onAuxClick={open} title={b.url}>
-          <div className="truncate text-sm font-medium">
+          <div className="truncate text-sm leading-none font-medium">
             <Highlight text={b.title || b.url} query={query} />
           </div>
-          <div className="flex items-center gap-1.5 truncate text-xs text-charcoal/50 dark:text-zinc-400">
+          <div className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-charcoal/50 dark:text-zinc-400">
             {pending && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" title="待同步" />}
             <span className="truncate">
               <Highlight text={hostname(b.url)} query={query} />

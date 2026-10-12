@@ -157,10 +157,10 @@ function StashCard({ stash: s, hits, query, saved, open, onToggle, notify }: {
               title={onToggle ? (open ? '收起' : '展开') : undefined}
             >
               <ChevronRightIcon width={14} height={14} className={`shrink-0 text-charcoal/40 transition dark:text-zinc-500 ${open ? 'rotate-90' : ''}`} />
-              <span className="truncate text-sm font-medium text-forest dark:text-zinc-100">
+              <span className="truncate text-sm leading-none font-medium text-forest dark:text-zinc-100">
                 <Highlight text={stashLabel(s)} query={query} />
               </span>
-              <span className="shrink-0 text-xs text-charcoal/45 dark:text-zinc-500">{partial ? `${hits.length}/${s.items.length}` : s.items.length}</span>
+              <span className="shrink-0 text-xs leading-none text-charcoal/45 dark:text-zinc-500">{partial ? `${hits.length}/${s.items.length}` : s.items.length}</span>
             </button>
             <button className={`btn-ghost shrink-0 p-1 ${hoverOnly}`} title="重命名" onClick={() => setRenaming(true)}>
               <EditIcon width={14} height={14} />
@@ -173,7 +173,7 @@ function StashCard({ stash: s, hits, query, saved, open, onToggle, notify }: {
           onClick={openAll}
         >
           <ExternalLinkIcon width={12} height={12} />
-          {partial ? `打开 ${hits.length} 个` : '全部打开'}
+          <span className="leading-none">{partial ? `打开 ${hits.length} 个` : '全部打开'}</span>
         </button>
         <button
           className={`btn-danger shrink-0 p-1 ${confirmDelete ? 'bg-red-50 px-2 text-xs dark:bg-red-950' : hoverOnly}`}
@@ -214,8 +214,10 @@ function StashRow({ item, query, saved, onRemove, notify }: { item: StashItem; q
   return (
     <li className="group hover-row flex items-center gap-2.5 rounded-md px-2 py-0.5">
       <Favicon url={item.url} size={16} />
-      <button className="min-w-0 flex-1 -translate-y-px truncate py-0.5 text-left text-sm leading-5" onClick={open} onAuxClick={open} title={`${item.title}\n${item.url}`}>
-        <Highlight text={item.title || item.url} query={query} />
+      <button className="flex min-w-0 flex-1 items-center self-stretch text-left" onClick={open} onAuxClick={open} title={`${item.title}\n${item.url}`}>
+        <span className="min-w-0 truncate text-sm leading-none">
+          <Highlight text={item.title || item.url} query={query} />
+        </span>
       </button>
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
         <button
